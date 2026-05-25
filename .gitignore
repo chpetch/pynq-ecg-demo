@@ -24,5 +24,11 @@ algo/plots/
 # Streamlit
 .streamlit/
 
+# Session logs (local only)
+sessions/
+
+# Claude local settings
+.claude/
+
 # OS
 .DS_Store
