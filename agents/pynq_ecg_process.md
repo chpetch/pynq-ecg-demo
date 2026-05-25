@@ -128,24 +128,38 @@ Requirements:
 
 | Offset | Name               | R/W | Bits   | Description                          | Default  |
 |--------|--------------------|-----|--------|--------------------------------------|----------|
-| 0x00   | BPM_CONFIG         | R/W | [7:0]  | Heart rate 30–240 BPM                | 0x3C     |
+| 0x00   | BPM_CH_A           | R/W | [7:0]  | Ch A heart rate 30–240 BPM           | 0x3C     |
 | 0x04   | RR_FLUCT           | R/W | [7:0]  | RR interval variation 0–255          | 0x00     |
 | 0x08   | AMP_FLUCT          | R/W | [7:0]  | Peak amplitude variation 0–255       | 0x00     |
-| 0x0C   | ECG_RAW            | R   | [11:0] | Latest raw ADC sample                | 0x000    |
-| 0x10   | ECG_FILTERED       | R   | [11:0] | Latest filtered sample               | 0x000    |
-| 0x14   | BPM_OUT            | R   | [7:0]  | Live BPM from R-peak detector        | 0x00     |
-| 0x18   | RPEAK_COUNT        | R   | [15:0] | Rolling R-peak event counter         | 0x0000   |
-| 0x1C   | DETECT_THRESHOLD   | R/W | [11:0] | R-peak detection threshold           | 0x800    |
-| 0x20   | STATUS             | R   | [1:0]  | [0]=signal_present [1]=lead_off      | 0x00     |
+| 0x0C   | BPM_CH_B           | R/W | [7:0]  | Ch B heart rate (default 40 BPM)     | 0x28     |
+| 0x10   | BPM_CH_C           | R/W | [7:0]  | Ch C heart rate (default 50 BPM)     | 0x32     |
+| 0x14   | BPM_CH_D           | R/W | [7:0]  | Ch D heart rate (default 70 BPM)     | 0x46     |
+| 0x18   | BPM_CH_E           | R/W | [7:0]  | Ch E heart rate (default 80 BPM)     | 0x50     |
+| 0x1C   | BPM_CH_F           | R/W | [7:0]  | Ch F heart rate (default 100 BPM)    | 0x64     |
+| 0x20   | BPM_CH_G           | R/W | [7:0]  | Ch G heart rate (default 120 BPM)    | 0x78     |
+| 0x24   | BPM_CH_H           | R/W | [7:0]  | Ch H heart rate (default 150 BPM)    | 0x96     |
+| 0x28   | ECG_RAW            | R   | [11:0] | Latest raw ADC sample                | 0x000    |
+| 0x2C   | ECG_FILTERED       | R   | [11:0] | Latest filtered sample               | 0x000    |
+| 0x30   | BPM_OUT            | R   | [7:0]  | Live BPM from R-peak detector        | 0x00     |
+| 0x34   | RPEAK_COUNT        | R   | [15:0] | Rolling R-peak event counter         | 0x0000   |
+| 0x38   | DETECT_THRESHOLD   | R/W | [11:0] | R-peak detection threshold           | 0x800    |
+| 0x3C   | STATUS             | R   | [1:0]  | [0]=signal_present [1]=lead_off      | 0x00     |
 
-- AXI write path: update config registers (0x00, 0x04, 0x08, 0x1C) on WVALID
+- AXI write path: update config registers (0x00–0x24, 0x38) on WVALID
 - AXI read path: return register value on ARVALID, respond within 2 cycles
 - Status register: signal_present = 1 if any sample in last 1000 cycles > 0x010
 
 - Interface: standard AXI4-Lite slave ports (s_axi_* prefix)
 - Output wires to connect to other PL modules:
   ```
-  output wire [7:0]  bpm_config,
+  output wire [7:0]  bpm_ch_a,
+  output wire [7:0]  bpm_ch_b,
+  output wire [7:0]  bpm_ch_c,
+  output wire [7:0]  bpm_ch_d,
+  output wire [7:0]  bpm_ch_e,
+  output wire [7:0]  bpm_ch_f,
+  output wire [7:0]  bpm_ch_g,
+  output wire [7:0]  bpm_ch_h,
   output wire [7:0]  rr_fluct,
   output wire [7:0]  amp_fluct,
   output wire [11:0] detect_thresh,
