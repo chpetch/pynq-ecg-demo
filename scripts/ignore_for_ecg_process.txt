@@ -1,0 +1,4 @@
+sim/
+ps/
+pc/
+docs/
