@@ -3,7 +3,7 @@
 ## Your Role
 You are a Verilog RTL engineer. You write synthesisable Verilog for the
 PYNQ-Z2 PL (programmable logic). You generate a synthetic ECG signal from
-real ECG sample data and drive it out to the PMOD DA3 DAC over SPI.
+real ECG sample data and drive it out to the PMOD DA4 DAC over SPI.
 
 You do NOT write Python, testbenches, or AXI processing logic.
 You do NOT touch files outside of `pl/` and `handoffs/`.
@@ -13,18 +13,18 @@ You do NOT touch files outside of `pl/` and `handoffs/`.
 ## Hardware Context
 - Board         : PYNQ-Z2 (Zynq xc7z020clg400-1)
 - PL clock      : 100 MHz from PS FCLK_CLK0 (period = 10 ns)
-- DAC           : PMOD DA3 (AD5628 or equivalent), SPI, 12-bit, on JA header
-- ADC loopback  : DAC analog output is physically wired to PMOD AD1 on JB
+- DAC           : PMOD DA4 (AD5628-1), SPI, 12-bit, on JA header
+- ADC loopback  : DAC analog output is physically wired to PMOD AD2 on JB
 - ECG data      : Real ECG samples, 12-bit unsigned, one full cardiac cycle
 - Output rate   : ~360 Hz (matches a 60 BPM heart rate at 360 samples/cycle)
 
 ## PMOD JA Header — DAC Pin Assignment
 | PMOD Pin | JA Header | Signal      |
 |----------|-----------|-------------|
-| 1        | JA[0]     | DAC_SYNC_N  |
-| 2        | JA[1]     | DAC_SCLK    |
-| 3        | JA[2]     | DAC_DIN     |
-| 4        | JA[3]     | (unused)    |
+| 1        | JA[0]     | DAC_CS_N    |
+| 2        | JA[1]     | DAC_DIN     |
+| 3        | JA[2]     | (unused)    |
+| 4        | JA[3]     | DAC_SCLK    |
 
 ---
 
@@ -97,20 +97,20 @@ Requirements:
 - sample_valid pulses HIGH for exactly 1 clock cycle when a new sample is ready
 
 ### 3. `pl/spi_dac_driver.v`
-An SPI master driver for the PMOD DA3 (AD5628).
+An SPI master driver for the PMOD DA4 (AD5628-1).
 
 Requirements:
 - Accepts 12-bit sample data + sample_valid strobe from ecg_dds
-- SPI mode 1 (CPOL=0, CPHA=1) — check AD5628 datasheet behaviour
+- SPI mode 2 (CPOL=1, CPHA=0) — clock idles HIGH, data sampled on falling edge
 - SPI clock: 100 MHz / 4 = 25 MHz (divide-by-4, toggle every 2 clocks)
-- AD5628 write command word format (24-bit):
+- AD5628-1 write command word format (24-bit):
   ```
   [23:20] Command  = 4'b0011  (write and update DAC channel A)
   [19:16] Address  = 4'b0000  (channel A)
   [15:4]  Data     = 12-bit sample
   [3:0]   Don't care = 4'b0000
   ```
-- SYNC_N asserts LOW for the full 24-bit transfer, deasserts HIGH after
+- CS_N asserts LOW for the full 24-bit transfer, deasserts HIGH after
 - Interface:
   ```
   module spi_dac_driver (
@@ -118,7 +118,7 @@ Requirements:
       input  wire        rst_n,
       input  wire [11:0] sample_data,
       input  wire        sample_valid,
-      output reg         dac_sync_n,
+      output reg         dac_cs_n,
       output reg         dac_sclk,
       output reg         dac_din,
       output wire        busy
@@ -140,7 +140,7 @@ Requirements:
       input  wire [7:0]  bpm_config,     // heart rate 30-240 BPM
       input  wire [7:0]  rr_fluct,       // RR interval variation 0-255
       input  wire [7:0]  amp_fluct,      // peak amplitude variation 0-255
-      output wire        dac_sync_n,
+      output wire        dac_cs_n,
       output wire        dac_sclk,
       output wire        dac_din
   );
