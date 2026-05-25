@@ -52,7 +52,7 @@ Produce:
 **`docs/architecture.md`** (initial version)
 Sections:
 - System Overview: one paragraph, what the project does end-to-end
-- Block Diagram: ASCII art showing PL → DAC → (loopback wire) → ADC → PL → PS → PC
+- Block Diagram: Mermaid `flowchart TD` diagram showing PL → DAC → (loopback wire) → ADC → PL → PS → PC. Use `subgraph` blocks for PL, PS, and PC layers. Use edge labels for signal names and protocols.
 - Layer Summary: table with Layer, Technology, Responsibility
 - Signal Generation block: inputs, outputs, key parameters
 

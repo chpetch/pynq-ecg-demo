@@ -8,59 +8,45 @@ The PYNQ-Z2 ECG Demo generates realistic 12-bit ECG waveforms in programmable lo
 
 ## Block Diagram
 
-```
-  ┌─────────────────────────────────────────┐
-  │  Programmable Logic (PL)                │
-  │                                         │
-  │  ┌──────────┐   ┌──────────┐            │
-  │  │ ecg_rom  │──▶│ ecg_dds  │ ×8 ch     │
-  │  └──────────┘   └────┬─────┘            │
-  │                      │ sample_data[11:0]│
-  │               ┌──────▼──────────┐       │
-  │               │ spi_dac_driver  │       │
-  │               └──────┬──────────┘       │
-  │        JA header     │ SPI (CS_N/SCLK/DIN)
-  └──────────────────────┼──────────────────┘
-                         │
-               ┌─────────▼────────┐
-               │  PMOD DA4        │
-               │  (AD5628-1 DAC)  │
-               └─────────┬────────┘
-                         │ VOUT Ch A (0–2.5 V)
-                  jumper wire (loopback)
-                         │
-               ┌─────────▼────────┐
-               │  PMOD AD2        │
-               │  (XADC ADC)      │
-               └─────────┬────────┘
-                         │ JB header
-  ┌──────────────────────┼──────────────────┐
-  │  Programmable Logic  │ (Milestone 3)    │
-  │                      │                  │
-  │           ┌──────────▼──────────┐       │
-  │           │ ecg_process_top     │       │
-  │           │ (FIR + R-peak det.) │       │
-  │           └──────────┬──────────┘       │
-  │                      │ AXI-Lite regs    │
-  └──────────────────────┼──────────────────┘
-                         │
-  ┌──────────────────────┼──────────────────┐
-  │  Processing System   │ (Zynq PS)        │
-  │                      │                  │
-  │           ┌──────────▼──────────┐       │
-  │           │  pynq_ecg_server    │       │
-  │           │  (Python / Flask)   │       │
-  │           └──────┬──────────────┘       │
-  └──────────────────┼──────────────────────┘
-                     │ WebSocket ws://…:5000/ws
-                     │ REST POST /config
-  ┌──────────────────┼──────────────────────┐
-  │  PC Dashboard    │                      │
-  │                  │                      │
-  │       ┌──────────▼──────────┐           │
-  │       │  Streamlit app      │           │
-  │       └─────────────────────┘           │
-  └─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph PL_GEN["Programmable Logic — Signal Generation"]
+        ROM["ecg_rom\n360 samples · 12-bit"]
+        DDS["ecg_dds ×8\nBPM 40 / 50 / 60 / 70 / 80 / 100 / 120 / 150"]
+        SPIDRV["spi_dac_driver\nSPI Mode 2 · 25 MHz · 8-frame burst"]
+        ROM -->|addr / data| DDS
+        DDS -->|"sample_data[11:0] ×8\nsample_valid"| SPIDRV
+    end
+
+    SPIDRV -->|"JA: CS_N · SCLK · DIN"| DAC["PMOD DA4\nAD5628-1 · 12-bit · 8-ch SPI DAC"]
+    DAC -->|"VOUT Ch A · 0–2.5 V\nloopback wire"| ADC["PMOD AD2\nAD7991-0 · 12-bit · I²C ADC"]
+
+    subgraph PL_PROC["Programmable Logic — Signal Processing  _(Milestone 3)_"]
+        I2C["i2c_adc_driver\n400 kHz · addr 0x28"]
+        FIR["fir_filter\n31-tap FIR bandpass"]
+        RPEAK["rpeak_detector\nPan-Tompkins threshold"]
+        AXICTRL["axi_ecg_ctrl\nAXI-Lite slave · 0x43C00000"]
+        I2C -->|"adc_data[11:0]\nadc_valid"| FIR
+        FIR -->|"filtered[11:0]\nvalid"| RPEAK
+        RPEAK -->|"bpm_out · rpeak_detected"| AXICTRL
+        I2C -->|"ecg_raw[11:0]"| AXICTRL
+        FIR -->|"ecg_filt[11:0]"| AXICTRL
+    end
+
+    ADC -->|"JB: SDA · SCL"| I2C
+
+    subgraph PS["Processing System — Zynq PS"]
+        SERVER["ps/server.py\nPYNQ 3.0 overlay"]
+    end
+
+    AXICTRL -->|"AXI-Lite reads\n32-bit · 0x43C00000"| SERVER
+
+    subgraph PC["PC Dashboard"]
+        DASH["pc/dashboard.py\nStreamlit"]
+    end
+
+    SERVER -->|"WebSocket ws://…:5000/ws\n360 Hz JSON frames"| DASH
+    DASH -->|"REST POST /config\nBPM · HRV · amplitude"| SERVER
 ```
 
 ---
