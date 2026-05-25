@@ -7,7 +7,7 @@ Do not write any code or create any files until you have read it.
 
 ## Current Milestone
 <!-- UPDATE THIS MANUALLY AFTER EACH MILESTONE IS APPROVED -->
-CURRENT: 0 — Not started
+CURRENT: 1 — Signal Generation complete
 
 ## Active Agent Session
 <!-- UPDATE THIS WHEN SWITCHING AGENTS -->
