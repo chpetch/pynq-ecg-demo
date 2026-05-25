@@ -13,17 +13,17 @@ You do NOT touch files outside of `pl/` and `handoffs/`.
 ## Hardware Context
 - Board         : PYNQ-Z2 (Zynq xc7z020clg400-1)
 - PL clock      : 100 MHz from PS FCLK_CLK0
-- ADC           : PMOD AD1 (AD7476A or equivalent), SPI, 12-bit, on JB header
-- Input signal  : ECG loopback from PMOD DA3 DAC output
+- ADC           : PMOD AD2 (AD7991-0), I2C, 12-bit, on JB header
+- Input signal  : ECG loopback from PMOD DA4 DAC output
 - Sample rate   : 360 Hz (one sample every 277,778 clock cycles)
 - AXI base addr : 0x43C00000
 
 ## PMOD JB Header — ADC Pin Assignment
 | PMOD Pin | JB Header | Signal      |
 |----------|-----------|-------------|
-| 1        | JB[0]     | ADC_CS_N    |
-| 2        | JB[1]     | ADC_SCLK    |
-| 3        | JB[2]     | ADC_DOUT    |
+| 1        | JB[0]     | ADC_SDA     |
+| 2        | JB[1]     | ADC_SCL     |
+| 3        | JB[2]     | (unused)    |
 | 4        | JB[3]     | (unused)    |
 
 ## Read Before Starting — Mandatory
@@ -43,26 +43,28 @@ Read these three files before writing a single line of Verilog:
 
 ## Files You Must Produce
 
-### 1. `pl/spi_adc_driver.v`
-An SPI slave-read driver for PMOD AD1 (AD7476A).
+### 1. `pl/i2c_adc_driver.v`
+An I2C master driver for PMOD AD2 (AD7991-0).
 
 Requirements:
 - Triggered by sample_valid pulse from ecg_dds (via top-level connection)
-- SPI mode 0 (CPOL=0, CPHA=0), 16-bit transfer (4 leading zeros + 12-bit data)
-- SPI clock: 100 MHz / 4 = 25 MHz
-- AD7476A read sequence:
-  - Assert CS_N LOW
-  - Clock out 16 bits, capture bits [11:0] as the sample
-  - Deassert CS_N HIGH
+- I2C fast mode: 400 kHz clock (100 MHz / 250 = 400 kHz)
+- I2C address: 0x28 (AD7991-0, ADDR pin low), 7-bit addressing
+- Read sequence:
+  1. START + address 0x28 + WRITE → send config byte 0x10 (enable channel 0 only)
+  2. REPEATED START + address 0x28 + READ → read 2 bytes
+     - Byte 1: [7:4] = channel tag (ignored), [3:0] = data bits [11:8]
+     - Byte 2: [7:0] = data bits [7:0]
+  3. NACK + STOP
+- SDA is bidirectional (open-drain); SCL is output only
 - Interface:
   ```
-  module spi_adc_driver (
+  module i2c_adc_driver (
       input  wire        clk,
       input  wire        rst_n,
       input  wire        start,          // pulse from ecg_dds sample_valid
-      output reg         adc_cs_n,
-      output reg         adc_sclk,
-      input  wire        adc_dout,
+      inout  wire        adc_sda,
+      output wire        adc_scl,
       output reg  [11:0] adc_data,
       output reg         adc_valid       // pulses HIGH 1 cycle when data ready
   );
@@ -157,7 +159,7 @@ Requirements:
 Top-level wrapper for all processing modules.
 
 Requirements:
-- Instantiates: spi_adc_driver, fir_filter, rpeak_detector, axi_ecg_ctrl
+- Instantiates: i2c_adc_driver, fir_filter, rpeak_detector, axi_ecg_ctrl
 - Connects internal signals between modules
 - Exposes to Block Design:
   ```
@@ -165,10 +167,9 @@ Requirements:
       input  wire        clk,
       input  wire        rst_n,
       input  wire        sample_trigger,   // from ecg_signal_gen_top sample_valid
-      // ADC SPI pins
-      output wire        adc_cs_n,
-      output wire        adc_sclk,
-      input  wire        adc_dout,
+      // ADC I2C pins
+      inout  wire        adc_sda,
+      output wire        adc_scl,
       // AXI4-Lite slave
       input  wire        s_axi_aclk,
       input  wire        s_axi_aresetn,
@@ -180,10 +181,10 @@ Requirements:
 Vivado pin constraint file for all PMOD pins used in both agents.
 
 Requirements:
-- JA header (DAC) pins: JA[0]=DAC_SYNC_N, JA[1]=DAC_SCLK, JA[2]=DAC_DIN
-- JB header (ADC) pins: JB[0]=ADC_CS_N, JB[1]=ADC_SCLK, JB[2]=ADC_DOUT
+- JA header (DAC) pins: JA[0]=DAC_CS_N, JA[1]=DAC_DIN, JA[3]=DAC_SCLK
+- JB header (ADC) pins: JB[0]=ADC_SDA, JB[1]=ADC_SCL
 - Use LVCMOS33 I/O standard for all PMOD pins
-- Set output drive strength to 8mA for SPI clock pins
+- Set output drive strength to 8mA for clock pins
 - Format:
   ```
   set_property PACKAGE_PIN <pin> [get_ports <signal>]
@@ -235,7 +236,7 @@ WebSocket. pynq_ps_server and pynq_gui both depend on this.
 
 ## What Success Looks Like
 When you are done, the following files must exist:
-- `pl/spi_adc_driver.v`
+- `pl/i2c_adc_driver.v`
 - `pl/fir_filter.v`
 - `pl/rpeak_detector.v`
 - `pl/axi_ecg_ctrl.v`

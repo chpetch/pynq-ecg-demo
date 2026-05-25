@@ -13,8 +13,8 @@ All file paths are relative to the project root: `pynq-ecg-demo/`
 - PL clock    : 100 MHz (from PS FCLK_CLK0)
 - AXI type    : AXI4-Lite, 32-bit data, 32-bit address
 - AXI base    : 0x43C00000
-- DAC         : PMOD DA3 on JA header (SPI, 12-bit)
-- ADC         : PMOD AD1 on JB header (SPI, 12-bit)
+- DAC         : PMOD DA4 on JA header (SPI, 12-bit, AD5628-1)
+- ADC         : PMOD AD2 on JB header (I2C, 12-bit, AD7991-0)
 - Loopback    : DAC output physically wired to ADC input
 - ECG rate    : ~360 Hz synthetic waveform
 - PS language : Python 3, PYNQ 3.0 framework
