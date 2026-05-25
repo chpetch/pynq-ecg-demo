@@ -97,26 +97,35 @@ Requirements:
 - sample_valid pulses HIGH for exactly 1 clock cycle when a new sample is ready
 
 ### 3. `pl/spi_dac_driver.v`
-An SPI master driver for the PMOD DA4 (AD5628-1).
+An SPI master driver for the PMOD DA4 (AD5628-1) — writes all 8 channels sequentially.
 
 Requirements:
-- Accepts 12-bit sample data + sample_valid strobe from ecg_dds
+- Accepts 8 × 12-bit sample inputs (one per DAC channel) + sample_valid strobe
 - SPI mode 2 (CPOL=1, CPHA=0) — clock idles HIGH, data sampled on falling edge
 - SPI clock: 100 MHz / 4 = 25 MHz (divide-by-4, toggle every 2 clocks)
-- AD5628-1 write command word format (24-bit):
+- AD5628-1 write command word format (24-bit per channel):
   ```
-  [23:20] Command  = 4'b0011  (write and update DAC channel A)
-  [19:16] Address  = 4'b0000  (channel A)
+  [23:20] Command  = 4'b0011  (write and update DAC channel)
+  [19:16] Address  = 4'b0000–4'b0111  (channel A–H)
   [15:4]  Data     = 12-bit sample
   [3:0]   Don't care = 4'b0000
   ```
-- CS_N asserts LOW for the full 24-bit transfer, deasserts HIGH after
+- On sample_valid: send 8 consecutive 24-bit frames (Ch A → Ch H), CS_N stays
+  LOW for all 8 frames, deasserts HIGH only after the 8th frame completes
+- Timing: 8 × 24 bits = 192 bits at 25 MHz = ~7.7 µs << 2.78 ms sample period
 - Interface:
   ```
   module spi_dac_driver (
       input  wire        clk,
       input  wire        rst_n,
-      input  wire [11:0] sample_data,
+      input  wire [11:0] sample_data_0,  // Ch A (loopback)
+      input  wire [11:0] sample_data_1,  // Ch B
+      input  wire [11:0] sample_data_2,  // Ch C
+      input  wire [11:0] sample_data_3,  // Ch D
+      input  wire [11:0] sample_data_4,  // Ch E
+      input  wire [11:0] sample_data_5,  // Ch F
+      input  wire [11:0] sample_data_6,  // Ch G
+      input  wire [11:0] sample_data_7,  // Ch H
       input  wire        sample_valid,
       output reg         dac_cs_n,
       output reg         dac_sclk,
@@ -124,29 +133,50 @@ Requirements:
       output wire        busy
   );
   ```
-- busy stays HIGH during an active SPI transfer; new sample_valid is ignored
-  while busy is HIGH
+- busy stays HIGH for all 8 frames; new sample_valid is ignored while busy is HIGH
 
 ### 4. `pl/ecg_signal_gen_top.v`
-Top-level wrapper that instantiates and connects ecg_rom, ecg_dds, and
-spi_dac_driver.
+Top-level wrapper that instantiates 8 × ecg_dds (one per channel) + ecg_rom + spi_dac_driver.
 
 Requirements:
+- Instantiate 8 independent ecg_dds modules sharing the same ecg_rom
+- Each DDS runs its own phase counter at a different BPM:
+
+  | Instance | Channel | Default BPM | AXI register |
+  |----------|---------|-------------|--------------|
+  | dds_a    | A (0x0) | bpm_ch_a    | configurable |
+  | dds_b    | B (0x1) | 40          | bpm_ch_b     |
+  | dds_c    | C (0x2) | 50          | bpm_ch_c     |
+  | dds_d    | D (0x3) | 70          | bpm_ch_d     |
+  | dds_e    | E (0x4) | 80          | bpm_ch_e     |
+  | dds_f    | F (0x5) | 100         | bpm_ch_f     |
+  | dds_g    | G (0x6) | 120         | bpm_ch_g     |
+  | dds_h    | H (0x7) | 150         | bpm_ch_h     |
+
+- Use sample_valid from dds_a (Ch A) as the master trigger for spi_dac_driver
 - Ports match exactly what will be connected in the Vivado Block Design:
   ```
   module ecg_signal_gen_top (
       input  wire        clk,
       input  wire        rst_n,
-      input  wire [7:0]  bpm_config,     // heart rate 30-240 BPM
-      input  wire [7:0]  rr_fluct,       // RR interval variation 0-255
-      input  wire [7:0]  amp_fluct,      // peak amplitude variation 0-255
+      input  wire [7:0]  bpm_ch_a,      // Ch A heart rate (default 60)
+      input  wire [7:0]  bpm_ch_b,      // Ch B heart rate (default 40)
+      input  wire [7:0]  bpm_ch_c,      // Ch C heart rate (default 50)
+      input  wire [7:0]  bpm_ch_d,      // Ch D heart rate (default 70)
+      input  wire [7:0]  bpm_ch_e,      // Ch E heart rate (default 80)
+      input  wire [7:0]  bpm_ch_f,      // Ch F heart rate (default 100)
+      input  wire [7:0]  bpm_ch_g,      // Ch G heart rate (default 120)
+      input  wire [7:0]  bpm_ch_h,      // Ch H heart rate (default 150)
+      input  wire [7:0]  rr_fluct,      // RR interval variation 0-255
+      input  wire [7:0]  amp_fluct,     // peak amplitude variation 0-255
       output wire        dac_cs_n,
       output wire        dac_sclk,
-      output wire        dac_din
+      output wire        dac_din,
+      output wire        sample_valid_out  // Ch A sample_valid for ADC trigger
   );
   ```
-- No AXI logic here — bpm_config is a simple wire input, AXI slave is handled
-  by pynq_signal_process agent
+- No AXI logic here — all bpm_ch_* are simple wire inputs, AXI slave is handled
+  by pynq_ecg_process agent
 
 ---
 
@@ -171,10 +201,17 @@ Base address: 0x43C00000
 
 | Offset | Name          | R/W | Bits   | Description                        | Default |
 |--------|---------------|-----|--------|------------------------------------|---------|
-| 0x00   | BPM_CONFIG    | R/W | [7:0]  | Heart rate, 30–240 BPM             | 0x3C    |
+| 0x00   | BPM_CH_A      | R/W | [7:0]  | Ch A heart rate, 30–240 BPM        | 0x3C    |
 | 0x04   | RR_FLUCT      | R/W | [7:0]  | RR interval variation, 0–255       | 0x00    |
 | 0x08   | AMP_FLUCT     | R/W | [7:0]  | Peak amplitude variation, 0–255    | 0x00    |
-| 0x0C   | (reserved for pynq_signal_process)                        |         |
+| 0x0C   | BPM_CH_B      | R/W | [7:0]  | Ch B heart rate (default 40 BPM)   | 0x28    |
+| 0x10   | BPM_CH_C      | R/W | [7:0]  | Ch C heart rate (default 50 BPM)   | 0x32    |
+| 0x14   | BPM_CH_D      | R/W | [7:0]  | Ch D heart rate (default 70 BPM)   | 0x46    |
+| 0x18   | BPM_CH_E      | R/W | [7:0]  | Ch E heart rate (default 80 BPM)   | 0x50    |
+| 0x1C   | BPM_CH_F      | R/W | [7:0]  | Ch F heart rate (default 100 BPM)  | 0x64    |
+| 0x20   | BPM_CH_G      | R/W | [7:0]  | Ch G heart rate (default 120 BPM)  | 0x78    |
+| 0x24   | BPM_CH_H      | R/W | [7:0]  | Ch H heart rate (default 150 BPM)  | 0x96    |
+| 0x28   | (reserved for pynq_ecg_process)                           |         |
 ```
 
 ---
