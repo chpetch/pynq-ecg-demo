@@ -57,18 +57,31 @@ Max BPM = 240 → base_reload = 69443
 
 ---
 
-## Signal Processing Registers (pynq_signal_process) — Placeholder
+## Signal Processing Registers (pynq_ecg_process)
 
-Addresses 0x28 and above are reserved for the `pynq_signal_process` agent.
+Defined by agent `pynq_ecg_process` at Milestone 2.
+All registers are 32-bit aligned; unused upper bits read as 0.
 
-| Offset | Name           | R/W | Bits   | Description                              | Default |
-|--------|----------------|-----|--------|------------------------------------------|---------|
-| 0x28   | (reserved)     | —   | —      | pynq_signal_process registers start here | —       |
-| 0x2C   | (reserved)     | —   | —      | TBD by pynq_signal_process               | —       |
-| 0x30   | (reserved)     | —   | —      | TBD by pynq_signal_process               | —       |
-| 0x34   | (reserved)     | —   | —      | TBD by pynq_signal_process               | —       |
-| 0x38   | (reserved)     | —   | —      | TBD by pynq_signal_process               | —       |
-| 0x3C   | (reserved)     | —   | —      | TBD by pynq_signal_process               | —       |
+| Offset | Name              | R/W | Bits   | Description                              | Default |
+|--------|-------------------|-----|--------|------------------------------------------|---------|
+| 0x28   | ECG_RAW           | R   | [11:0] | Latest raw ADC sample from AD7991-0      | 0x000   |
+| 0x2C   | ECG_FILTERED      | R   | [11:0] | Latest FIR-filtered ECG sample           | 0x000   |
+| 0x30   | BPM_OUT           | R   | [7:0]  | Live BPM from R-peak detector            | 0x00    |
+| 0x34   | RPEAK_COUNT       | R   | [15:0] | Rolling R-peak event counter (wraps)     | 0x0000  |
+| 0x38   | DETECT_THRESHOLD  | R/W | [11:0] | R-peak detection threshold (default 2983)| 0x800   |
+| 0x3C   | STATUS            | R   | [1:0]  | [0]=signal_present [1]=lead_off          | 0x00    |
+
+### Notes
+
+- `ECG_RAW` and `ECG_FILTERED` update every ADC sample cycle (~360 Hz).
+- `BPM_OUT` updates after each confirmed R-peak. Reads 0 if no beat detected
+  for more than 65535 sample intervals (counter saturates — no-signal state).
+- `RPEAK_COUNT` is a 16-bit rolling counter; wraps silently at 0xFFFF.
+- `DETECT_THRESHOLD` default reset value is 0x800 (2048). The PS driver
+  writes 2983 (0xBA7) at startup per `handoffs/algorithm_spec.md`.
+- `STATUS[0]` (signal_present): set if any raw sample > 0x010 in the past
+  1000 clock cycles; cleared at the start of each 1000-cycle window.
+- `STATUS[1]` (lead_off): reserved, reads 0.
 
 ---
 

@@ -52,3 +52,31 @@ Append a new entry after each user-approved milestone. Never delete earlier entr
 - `handoffs/algorithm_spec.md` : FIR coefficients (h[0]–h[30]), threshold 2983, refractory 72 — implement exactly, no deviations
 - `handoffs/register_map.md` : add processing registers starting at 0x28; do not touch 0x00–0x24
 - `handoffs/adc_interface.md` : i2c_adc_driver interface spec
+
+---
+
+## Milestone 3 — Signal Processing (2026-05-26)
+
+**Files produced:**
+- `pl/i2c_adc_driver.v` : FSM I2C master, 400 kHz, addr 0x28, config 0x10, reads 2 bytes
+- `pl/fir_filter.v` : 31-tap direct-form FIR, Q1.15 coefficients from algorithm_spec.md verbatim, output = acc[26:15]
+- `pl/rpeak_detector.v` : Pan-Tompkins threshold detector, 72-sample refractory, 16-bit interval counter, iterative subtraction BPM divider
+- `pl/axi_ecg_ctrl.v` : AXI4-Lite slave, full register map 0x00–0x3C, 2-cycle read path, signal-present rolling window
+- `pl/ecg_process_top.v` : top-level wrapper connecting all four modules
+- `pl/constraints.xdc` : JA[0,1,3] DAC SPI (V15/W15/T10) + JB[0,1] ADC I2C (W12/W11), LVCMOS33, 8 mA clocks
+- `handoffs/register_map.md` : updated with 0x28–0x3C definitions (0x00–0x24 untouched)
+- `handoffs/ws_schema.json` : WebSocket JSON payload schema created
+
+**Key decisions:**
+- FIR coefficients use `-16'sdN` signed literal syntax (valid Verilog-2012, accepted by iverilog and Vivado)
+- BPM divider: iterative subtractive divider (no combinational divider, no synthesis latches)
+- DETECT_THRESHOLD resets to 0x800; PS must write 2983 (0xBA7) at boot per algorithm_spec.md
+- axi_ecg_ctrl latches write address and data separately, fires transaction only when both valid (correct AXI4-Lite behaviour)
+
+**Issues / retries:**
+- None — `iverilog -t null -g2012 pl/*.v` passed clean on first attempt
+
+**Next agent must read:**
+- `handoffs/register_map.md` : full register map for AXI access from PS
+- `handoffs/ws_schema.json` : WebSocket payload schema — ps_server and gui both depend on this
+- `handoffs/adc_interface.md` : sample rate and signal format

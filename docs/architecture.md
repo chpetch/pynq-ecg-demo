@@ -144,4 +144,57 @@ Full algorithm detail: `docs/algorithm_summary.md`.
 
 ---
 
-_Last updated: Milestone 2 — Algorithm Design_
+## Vivado Block Design
+
+### IP Blocks Required
+
+| IP Block | Instance Name | Notes |
+|----------|---------------|-------|
+| Zynq-7000 PS | `processing_system7_0` | Enable AXI GP0 master port; configure DDR and UART as needed |
+| AXI Interconnect | `axi_interconnect_0` | 1 master (PS GP0), 1 slave (ecg_process_top S_AXI) |
+| ecg_signal_gen_top | `ecg_signal_gen_top_0` | Custom IP; add `pl/` sources as design sources |
+| ecg_process_top | `ecg_process_top_0` | Custom IP; includes fir_filter, rpeak_detector, axi_ecg_ctrl |
+| Processor System Reset | `proc_sys_reset_0` | Drives `peripheral_aresetn` to custom IPs |
+| Clocking Wizard | `clk_wiz_0` | Input: 125 MHz PS FCLK_CLK0; Output: 100 MHz system clock |
+
+### Connection Summary
+
+| From | To | Signal |
+|------|----|--------|
+| `processing_system7_0` FCLK_CLK0 | `clk_wiz_0` clk_in1 | 125 MHz reference clock |
+| `clk_wiz_0` clk_out1 | `ecg_signal_gen_top_0` clk | 100 MHz system clock |
+| `clk_wiz_0` clk_out1 | `ecg_process_top_0` clk | 100 MHz system clock |
+| `clk_wiz_0` clk_out1 | `axi_interconnect_0` ACLK | 100 MHz AXI clock |
+| `clk_wiz_0` clk_out1 | `proc_sys_reset_0` slowest_sync_clk | Clock for reset synchroniser |
+| `processing_system7_0` FCLK_RESET0_N | `proc_sys_reset_0` ext_reset_in | PS reset source |
+| `proc_sys_reset_0` peripheral_aresetn | `ecg_signal_gen_top_0` rst_n | Active-low reset |
+| `proc_sys_reset_0` peripheral_aresetn | `ecg_process_top_0` rst_n | Active-low reset |
+| `proc_sys_reset_0` interconnect_aresetn | `axi_interconnect_0` ARESETN | AXI interconnect reset |
+| `processing_system7_0` M_AXI_GP0 | `axi_interconnect_0` S00_AXI | PS AXI master to interconnect |
+| `axi_interconnect_0` M00_AXI | `ecg_process_top_0` S_AXI | AXI slave at 0x43C00000 |
+| `ecg_signal_gen_top_0` sample_valid_out | `ecg_process_top_0` sample_trigger | 360 Hz sample strobe |
+| `ecg_process_top_0` bpm_ch_a … bpm_ch_h | `ecg_signal_gen_top_0` bpm_ch_a … bpm_ch_h | Per-channel BPM [7:0] |
+| `ecg_process_top_0` rr_fluct | `ecg_signal_gen_top_0` rr_fluct | HRV magnitude [7:0] |
+| `ecg_process_top_0` amp_fluct | `ecg_signal_gen_top_0` amp_fluct | Amplitude variation [7:0] |
+| `ecg_signal_gen_top_0` dac_cs_n / dac_sclk / dac_din | Board pins V15 / T10 / W15 (JA) | SPI to PMOD DA4 |
+| `ecg_process_top_0` adc_sda / adc_scl | Board pins W12 / W11 (JB) | I2C to PMOD AD2 |
+
+### Address Editor Settings
+
+| Slave | Offset Address | Range | High Address |
+|-------|---------------|-------|--------------|
+| `ecg_process_top_0` S_AXI | `0x43C0_0000` | 64K | `0x43C0_FFFF` |
+
+### Build Steps (summary)
+
+1. Create a new Vivado RTL project targeting the PYNQ-Z2 (xc7z020clg400-1).
+2. Add all `pl/*.v` files as design sources.
+3. Add `pl/constraints.xdc` as a constraints source.
+4. Create a new Block Design; add and connect IP as listed above.
+5. Right-click the block design → **Validate Design**.
+6. Right-click the block design → **Create HDL Wrapper** (let Vivado manage the wrapper).
+7. Run **Generate Bitstream**; export `.bit` and `.hwh` to `ps/`.
+
+---
+
+_Last updated: Milestone 3 — Signal Processing_
