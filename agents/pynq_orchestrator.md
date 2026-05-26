@@ -41,6 +41,14 @@ Read the relevant agent prompt before spawning it.
 
 ## Execution Plan (sequential, milestone-gated)
 
+Each milestone follows this pattern:
+1. Spawn agent → 2. Verify → 3. Syntax-check Verilog (if any) → 4. Spawn pynq_docs → 5. ⏸ PAUSE → **6. 📝 LOG** → proceed
+
+**Step 6 is mandatory before every milestone transition.**
+See "Note-Taking Protocol" below for what to write and where.
+
+---
+
 ### MILESTONE 1 — Signal Generation
 1. Spawn **pynq_ecg_gen** with task: "Implement ECG signal generation per your system prompt"
 2. Verify pynq_ecg_gen output:
@@ -48,8 +56,10 @@ Read the relevant agent prompt before spawning it.
    - `pl/spi_dac_driver.v` exists
    - `handoffs/register_map.md` exists with at least base address and field list
    - `handoffs/adc_interface.md` exists describing output signal format
-3. Spawn **pynq_docs** with task: "Document milestone 1 — signal generation complete"
-4. ⏸ PAUSE — report to user, wait for approval before continuing
+3. Run `iverilog -t null -g2012 pl/*.v` in WSL — fix any errors before continuing
+4. Spawn **pynq_docs** with task: "Document milestone 1 — signal generation complete"
+5. ⏸ PAUSE — report to user, wait for approval before continuing
+6. 📝 LOG — append Milestone 1 entry to `handoffs/milestone_log.md`, update `CLAUDE.md`
 
 ### MILESTONE 2 — Algorithm Design
 1. Spawn **pynq_ecg_algo** with task: "Design and validate the ECG processing algorithm per your system prompt"
@@ -63,6 +73,7 @@ Read the relevant agent prompt before spawning it.
 4. ⏸ PAUSE — show user the algorithm_spec.md summary and validation results
    Ask user: "Algorithm validated. Approve to proceed to Verilog implementation?"
    Wait for explicit approval before continuing
+5. 📝 LOG — append Milestone 2 entry to `handoffs/milestone_log.md`, update `CLAUDE.md`
 
 ### MILESTONE 3 — Signal Processing
 1. Spawn **pynq_ecg_process** with task: "Implement signal processing per your system prompt. Read handoffs/algorithm_spec.md first."
@@ -71,8 +82,10 @@ Read the relevant agent prompt before spawning it.
    - `pl/rpeak_detector.v` exists
    - `pl/axi_ecg_ctrl.v` exists with registers matching `handoffs/register_map.md`
    - `pl/constraints.xdc` exists with PMOD pin assignments
-3. Spawn **pynq_docs** with task: "Document milestone 3 — signal processing complete"
-4. ⏸ PAUSE — report to user, wait for approval before continuing
+3. Run `iverilog -t null -g2012 pl/*.v` in WSL — fix any errors before continuing
+4. Spawn **pynq_docs** with task: "Document milestone 3 — signal processing complete"
+5. ⏸ PAUSE — report to user, wait for approval before continuing
+6. 📝 LOG — append Milestone 3 entry to `handoffs/milestone_log.md`, update `CLAUDE.md`
 
 ### MILESTONE 4 — Simulation
 1. Spawn **pynq_simulation** with task: "Write and run simulations per your system prompt"
@@ -81,8 +94,9 @@ Read the relevant agent prompt before spawning it.
    - `sim/tb_fir_filter.v` exists
    - `sim/test_axi_ctrl.py` exists
    - `sim/run_sim.sh` exists and is executable
-3. Spawn **pynq_docs** with task: "Document milestone 3 — simulation complete"
+3. Spawn **pynq_docs** with task: "Document milestone 4 — simulation complete"
 4. ⏸ PAUSE — report to user, wait for approval before continuing
+5. 📝 LOG — append Milestone 4 entry to `handoffs/milestone_log.md`, update `CLAUDE.md`
 
 ### MILESTONE 5 — PS Server
 1. Spawn **pynq_ps_server** with task: "Implement PS server per your system prompt"
@@ -90,8 +104,9 @@ Read the relevant agent prompt before spawning it.
    - `ps/server.py` exists with WebSocket + REST endpoints
    - `ps/overlay_test.ipynb` exists
    - Endpoints match schema in `handoffs/ws_schema.json`
-3. Spawn **pynq_docs** with task: "Document milestone 4 — PS server complete"
+3. Spawn **pynq_docs** with task: "Document milestone 5 — PS server complete"
 4. ⏸ PAUSE — report to user, wait for approval before continuing
+5. 📝 LOG — append Milestone 5 entry to `handoffs/milestone_log.md`, update `CLAUDE.md`
 
 ### MILESTONE 6 — GUI Dashboard
 1. Spawn **pynq_gui** with task: "Implement Streamlit dashboard per your system prompt"
@@ -99,8 +114,39 @@ Read the relevant agent prompt before spawning it.
    - `pc/dashboard.py` exists
    - Connects to WebSocket schema in `handoffs/ws_schema.json`
    - Has config sliders that POST to PS REST endpoint
-3. Spawn **pynq_docs** with task: "Document milestone 5 — GUI complete. Generate final setup_guide.md"
+3. Spawn **pynq_docs** with task: "Document milestone 6 — GUI complete. Generate final setup_guide.md"
 4. ⏸ PAUSE — final report to user, project complete
+5. 📝 LOG — append Milestone 6 entry to `handoffs/milestone_log.md`, update `CLAUDE.md`
+
+---
+
+## Note-Taking Protocol
+
+After user approves a milestone and **before** spawning the next agent, you must:
+
+1. **Append** an entry to `handoffs/milestone_log.md` using this format:
+
+```markdown
+## Milestone N — Name (YYYY-MM-DD)
+
+**Files produced:**
+- `path/file.ext` : one-line description
+
+**Key decisions:**
+- [decision] : [reason]
+
+**Issues / retries:**
+- None  ← or describe what failed and how it was fixed
+
+**Next agent must read:**
+- `handoffs/file.md` : why it matters
+```
+
+2. **Update `CLAUDE.md`** — change the `CURRENT:` line to the completed milestone number and name.
+
+3. Only then spawn the next milestone's agent.
+
+The log is a **running file** — always append, never overwrite earlier entries.
 
 ---
 
