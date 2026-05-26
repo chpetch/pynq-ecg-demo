@@ -1,7 +1,7 @@
 // Module   : axi_ecg_ctrl
 // Project  : PYNQ-Z2 ECG Demo
 // Agent    : pynq_ecg_process
-// Purpose  : AXI4-Lite slave register block — full register map 0x00-0x3C
+// Purpose  : AXI4-Lite slave register block — full register map 0x00-0x40
 
 // Register map (base address 0x43C00000 set in Vivado address editor):
 //
@@ -21,6 +21,7 @@
 //  0x34  RPEAK_COUNT     R    [15:0]  Rolling R-peak event counter     (0x0000)
 //  0x38  DETECT_THRESHOLD R/W [11:0]  R-peak detection threshold       (0x800)
 //  0x3C  STATUS          R    [1:0]   [0]=signal_present [1]=lead_off  (0x00)
+//  0x40  ECG_DAC         R    [11:0]  Latest Ch A DDS sample value     (0x000)
 //
 // Default threshold 0x800 (2048 decimal); runtime override via PS sets 2983 per spec.
 
@@ -78,7 +79,10 @@ module axi_ecg_ctrl #(
     input  wire [11:0] ecg_raw_in,
     input  wire [11:0] ecg_filt_in,
     input  wire [7:0]  bpm_in,
-    input  wire        rpeak_in
+    input  wire        rpeak_in,
+
+    // Input wire from DDS — latest Ch A DAC sample
+    input  wire [11:0] dac_sample_in
 );
 
     // ---------------------------------------------------------------------------
@@ -99,6 +103,7 @@ module axi_ecg_ctrl #(
     // Read-only shadow registers (updated from inputs)
     reg [11:0] reg_ecg_raw;
     reg [11:0] reg_ecg_filt;
+    reg [11:0] ecg_dac_reg;
     reg [7:0]  reg_bpm_out;
     reg [15:0] reg_rpeak_count;
     reg [1:0]  reg_status;
@@ -152,6 +157,7 @@ module axi_ecg_ctrl #(
             // Read-only registers
             reg_ecg_raw    <= 12'd0;
             reg_ecg_filt   <= 12'd0;
+            ecg_dac_reg    <= 12'd0;
             reg_bpm_out    <= 8'd0;
             reg_rpeak_count<= 16'd0;
             reg_status     <= 2'b00;
@@ -201,26 +207,27 @@ module axi_ecg_ctrl #(
                 wr_data_valid <= 1'b0;
 
                 // Byte-enable aware write (only byte 0 is relevant for [7:0] regs)
-                case (wr_addr_lat[5:0])
-                    6'h00: if (wr_strb_lat[0]) reg_bpm_ch_a      <= wr_data_lat[7:0];
-                    6'h04: if (wr_strb_lat[0]) reg_rr_fluct       <= wr_data_lat[7:0];
-                    6'h08: if (wr_strb_lat[0]) reg_amp_fluct      <= wr_data_lat[7:0];
-                    6'h0C: if (wr_strb_lat[0]) reg_bpm_ch_b       <= wr_data_lat[7:0];
-                    6'h10: if (wr_strb_lat[0]) reg_bpm_ch_c       <= wr_data_lat[7:0];
-                    6'h14: if (wr_strb_lat[0]) reg_bpm_ch_d       <= wr_data_lat[7:0];
-                    6'h18: if (wr_strb_lat[0]) reg_bpm_ch_e       <= wr_data_lat[7:0];
-                    6'h1C: if (wr_strb_lat[0]) reg_bpm_ch_f       <= wr_data_lat[7:0];
-                    6'h20: if (wr_strb_lat[0]) reg_bpm_ch_g       <= wr_data_lat[7:0];
-                    6'h24: if (wr_strb_lat[0]) reg_bpm_ch_h       <= wr_data_lat[7:0];
+                case (wr_addr_lat[6:0])
+                    7'h00: if (wr_strb_lat[0]) reg_bpm_ch_a      <= wr_data_lat[7:0];
+                    7'h04: if (wr_strb_lat[0]) reg_rr_fluct       <= wr_data_lat[7:0];
+                    7'h08: if (wr_strb_lat[0]) reg_amp_fluct      <= wr_data_lat[7:0];
+                    7'h0C: if (wr_strb_lat[0]) reg_bpm_ch_b       <= wr_data_lat[7:0];
+                    7'h10: if (wr_strb_lat[0]) reg_bpm_ch_c       <= wr_data_lat[7:0];
+                    7'h14: if (wr_strb_lat[0]) reg_bpm_ch_d       <= wr_data_lat[7:0];
+                    7'h18: if (wr_strb_lat[0]) reg_bpm_ch_e       <= wr_data_lat[7:0];
+                    7'h1C: if (wr_strb_lat[0]) reg_bpm_ch_f       <= wr_data_lat[7:0];
+                    7'h20: if (wr_strb_lat[0]) reg_bpm_ch_g       <= wr_data_lat[7:0];
+                    7'h24: if (wr_strb_lat[0]) reg_bpm_ch_h       <= wr_data_lat[7:0];
                     // 0x28 ECG_RAW       — read-only, write ignored
                     // 0x2C ECG_FILTERED  — read-only, write ignored
                     // 0x30 BPM_OUT       — read-only, write ignored
                     // 0x34 RPEAK_COUNT   — read-only, write ignored
-                    6'h38: begin
+                    7'h38: begin
                         if (wr_strb_lat[0]) reg_detect_thresh[7:0]  <= wr_data_lat[7:0];
                         if (wr_strb_lat[1]) reg_detect_thresh[11:8] <= wr_data_lat[11:8];
                     end
                     // 0x3C STATUS        — read-only, write ignored
+                    // 0x40 ECG_DAC       — read-only, write ignored
                     default: ; // no-op
                 endcase
 
@@ -238,6 +245,7 @@ module axi_ecg_ctrl #(
             // ------------------------------------------------------------------
             reg_ecg_raw  <= ecg_raw_in;
             reg_ecg_filt <= ecg_filt_in;
+            ecg_dac_reg  <= dac_sample_in;
             reg_bpm_out  <= bpm_in;
 
             if (rpeak_in)
@@ -274,23 +282,24 @@ module axi_ecg_ctrl #(
                 s_axi_rvalid  <= 1'b1;
 
                 // Register read decode
-                case (s_axi_araddr[5:0])
-                    6'h00: s_axi_rdata <= {24'd0, reg_bpm_ch_a};
-                    6'h04: s_axi_rdata <= {24'd0, reg_rr_fluct};
-                    6'h08: s_axi_rdata <= {24'd0, reg_amp_fluct};
-                    6'h0C: s_axi_rdata <= {24'd0, reg_bpm_ch_b};
-                    6'h10: s_axi_rdata <= {24'd0, reg_bpm_ch_c};
-                    6'h14: s_axi_rdata <= {24'd0, reg_bpm_ch_d};
-                    6'h18: s_axi_rdata <= {24'd0, reg_bpm_ch_e};
-                    6'h1C: s_axi_rdata <= {24'd0, reg_bpm_ch_f};
-                    6'h20: s_axi_rdata <= {24'd0, reg_bpm_ch_g};
-                    6'h24: s_axi_rdata <= {24'd0, reg_bpm_ch_h};
-                    6'h28: s_axi_rdata <= {20'd0, reg_ecg_raw};
-                    6'h2C: s_axi_rdata <= {20'd0, reg_ecg_filt};
-                    6'h30: s_axi_rdata <= {24'd0, reg_bpm_out};
-                    6'h34: s_axi_rdata <= {16'd0, reg_rpeak_count};
-                    6'h38: s_axi_rdata <= {20'd0, reg_detect_thresh};
-                    6'h3C: s_axi_rdata <= {30'd0, reg_status};
+                case (s_axi_araddr[6:0])
+                    7'h00: s_axi_rdata <= {24'd0, reg_bpm_ch_a};
+                    7'h04: s_axi_rdata <= {24'd0, reg_rr_fluct};
+                    7'h08: s_axi_rdata <= {24'd0, reg_amp_fluct};
+                    7'h0C: s_axi_rdata <= {24'd0, reg_bpm_ch_b};
+                    7'h10: s_axi_rdata <= {24'd0, reg_bpm_ch_c};
+                    7'h14: s_axi_rdata <= {24'd0, reg_bpm_ch_d};
+                    7'h18: s_axi_rdata <= {24'd0, reg_bpm_ch_e};
+                    7'h1C: s_axi_rdata <= {24'd0, reg_bpm_ch_f};
+                    7'h20: s_axi_rdata <= {24'd0, reg_bpm_ch_g};
+                    7'h24: s_axi_rdata <= {24'd0, reg_bpm_ch_h};
+                    7'h28: s_axi_rdata <= {20'd0, reg_ecg_raw};
+                    7'h2C: s_axi_rdata <= {20'd0, reg_ecg_filt};
+                    7'h30: s_axi_rdata <= {24'd0, reg_bpm_out};
+                    7'h34: s_axi_rdata <= {16'd0, reg_rpeak_count};
+                    7'h38: s_axi_rdata <= {20'd0, reg_detect_thresh};
+                    7'h3C: s_axi_rdata <= {30'd0, reg_status};
+                    7'h40: s_axi_rdata <= {20'd0, ecg_dac_reg};
                     default: s_axi_rdata <= {DATA_WIDTH{1'b0}};
                 endcase
             end

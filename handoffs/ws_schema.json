@@ -1,6 +1,7 @@
 {
   "timestamp_ms": 0,
   "ecg_raw": 0,
+  "ecg_dac": 0,
   "ecg_filtered": 0,
   "bpm": 0,
   "rpeak": false,

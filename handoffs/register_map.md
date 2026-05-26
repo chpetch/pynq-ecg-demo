@@ -70,6 +70,7 @@ All registers are 32-bit aligned; unused upper bits read as 0.
 | 0x34   | RPEAK_COUNT       | R   | [15:0] | Rolling R-peak event counter (wraps)     | 0x0000  |
 | 0x38   | DETECT_THRESHOLD  | R/W | [11:0] | R-peak detection threshold (default 2983)| 0x800   |
 | 0x3C   | STATUS            | R   | [1:0]  | [0]=signal_present [1]=lead_off          | 0x00    |
+| 0x40   | ECG_DAC           | R   | [11:0] | Latest Ch A DDS sample value (DAC waveform) | 0x000 |
 
 ### Notes
 

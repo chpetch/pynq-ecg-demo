@@ -32,7 +32,8 @@ module ecg_signal_gen_top (
     output wire        dac_cs_n,
     output wire        dac_sclk,
     output wire        dac_din,
-    output wire        sample_valid_out  // Ch A sample_valid for ADC trigger
+    output wire        sample_valid_out,  // Ch A sample_valid for ADC trigger
+    output wire [11:0] sample_data_out    // Ch A DDS sample value, valid when sample_valid_out is HIGH
 );
 
     // -----------------------------------------------------------------------
@@ -45,6 +46,7 @@ module ecg_signal_gen_top (
 
     // Ch A sample_valid is the master trigger for the SPI driver
     assign sample_valid_out = valid_a;
+    assign sample_data_out  = sample_a;
 
     // -----------------------------------------------------------------------
     // ecg_dds — Channel A (60 BPM default, configurable)

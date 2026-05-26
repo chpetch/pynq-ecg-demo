@@ -46,6 +46,9 @@ module ecg_process_top (
     output wire        s_axi_rvalid,
     input  wire        s_axi_rready,
 
+    // DAC waveform sample from DDS (Ch A) for register 0x40
+    input  wire [11:0] dac_sample_in,
+
     // Output wires to ecg_signal_gen_top (BPM + modulation parameters)
     output wire [7:0]  bpm_ch_a,
     output wire [7:0]  bpm_ch_b,
@@ -159,7 +162,10 @@ module ecg_process_top (
         .ecg_raw_in    (adc_data),
         .ecg_filt_in   (fir_data_out),
         .bpm_in        (bpm_measured),
-        .rpeak_in      (rpeak_detected)
+        .rpeak_in      (rpeak_detected),
+
+        // DAC waveform sample from DDS
+        .dac_sample_in (dac_sample_in)
     );
 
 endmodule
