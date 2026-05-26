@@ -90,10 +90,11 @@ See "Note-Taking Protocol" below for what to write and where.
 ### MILESTONE 4 — Simulation
 1. Spawn **pynq_simulation** with task: "Write and run simulations per your system prompt"
 2. Verify pynq_simulation output:
-   - `sim/tb_ecg_dds.v` exists
-   - `sim/tb_fir_filter.v` exists
-   - `sim/test_axi_ctrl.py` exists
-   - `sim/run_sim.sh` exists and is executable
+   - `sim/test_ecg_dds/test_ecg_dds.py` exists
+   - `sim/test_fir_filter/test_fir_filter.py` exists
+   - `sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py` exists
+   - `sim/run_all.sh` exists and is executable
+   - `handoffs/simulation_results.md` shows 32 pass, 0 failed
 3. Spawn **pynq_docs** with task: "Document milestone 4 — simulation complete"
 4. ⏸ PAUSE — report to user, wait for approval before continuing
 5. 📝 LOG — append Milestone 4 entry to `handoffs/milestone_log.md`, update `CLAUDE.md`

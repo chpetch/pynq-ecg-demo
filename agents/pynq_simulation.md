@@ -46,9 +46,9 @@ sim/
 ├── test_spi_dac/
 │   ├── Makefile
 │   └── test_spi_dac.py
-├── test_spi_adc/
+├── test_i2c_adc/
 │   ├── Makefile
-│   └── test_spi_adc.py
+│   └── test_i2c_adc.py
 ├── test_fir_filter/
 │   ├── Makefile
 │   └── test_fir_filter.py
@@ -121,20 +121,26 @@ Save waveform: `sim/results/spi_dac.vcd`
 
 ---
 
-### 3. `test_spi_adc/test_spi_adc.py`
-Tests: `spi_adc_driver.v`
+### 3. `test_i2c_adc/test_i2c_adc.py`
+Tests: `i2c_adc_driver.v`
+
+Note: ADC is PMOD AD2 (AD7991-0), I2C, not SPI. Tests verify I2C protocol.
 
 Test cases:
-- **TC1 — Read sequence**: drive a known 12-bit pattern (0x5A3) onto adc_dout
-  in the correct bit order during an SPI read. Assert adc_data == 0x5A3
-  when adc_valid pulses.
+- **TC1 — Read sequence**: pulse `start`. Drive SDA responses for:
+  1. Address 0x28 + WRITE → ACK
+  2. Config byte 0x10 → ACK
+  3. Repeated START, address 0x28 + READ → ACK
+  4. Byte 1 = 0x05 (upper nibble = channel tag, lower 4 bits = data[11:8]) → ACK
+  5. Byte 2 = 0xA3 (data[7:0]) → NACK + STOP
+  Assert adc_data == 12'h5A3 when adc_valid pulses.
 
-- **TC2 — CS timing**: assert adc_cs_n goes LOW before first SCLK edge,
-  stays LOW for 16 bits, goes HIGH after last bit.
+- **TC2 — SCL frequency**: measure SCL period over one transaction.
+  Assert period = 250 clock cycles ± 2 (= 400 kHz at 100 MHz).
 
 - **TC3 — Valid pulse width**: assert adc_valid is HIGH for exactly 1 clock cycle.
 
-Save waveform: `sim/results/spi_adc.vcd`
+Save waveform: `sim/results/i2c_adc.vcd`
 
 ---
 
@@ -195,10 +201,13 @@ Save waveform: `sim/results/rpeak_detector.vcd`
 Tests: `axi_ecg_ctrl.v`
 
 Use cocotb's built-in AxiLiteMaster driver.
+Register addresses from `handoffs/register_map.md` (read it first):
+- 0x00 BPM_CH_A, 0x04 RR_FLUCT, 0x08 AMP_FLUCT
+- 0x28 ECG_RAW, 0x2C ECG_FILTERED, 0x30 BPM_OUT, 0x34 RPEAK_COUNT, 0x38 DETECT_THRESHOLD, 0x3C STATUS, 0x40 ECG_DAC
 
 Test cases:
-- **TC1 — Write BPM_CONFIG**: AXI write 0x3C to offset 0x00.
-  Assert bpm_config output wire == 8'h3C.
+- **TC1 — Write BPM_CH_A**: AXI write 0x3C to offset 0x00.
+  Assert bpm_ch_a output wire == 8'h3C.
 
 - **TC2 — Write RR_FLUCT**: AXI write 0x80 to offset 0x04.
   Assert rr_fluct output == 8'h80.
@@ -206,20 +215,20 @@ Test cases:
 - **TC3 — Write AMP_FLUCT**: AXI write 0x40 to offset 0x08.
   Assert amp_fluct output == 8'h40.
 
-- **TC4 — Read ECG_RAW**: drive ecg_raw_in=0xABC, AXI read offset 0x0C.
+- **TC4 — Read ECG_RAW**: drive ecg_raw_in=0xABC, AXI read offset 0x28.
   Assert read data == 32'h00000ABC.
 
-- **TC5 — Read BPM_OUT**: drive bpm_in=8'd75, AXI read offset 0x14.
+- **TC5 — Read BPM_OUT**: drive bpm_in=8'd75, AXI read offset 0x30.
   Assert read data == 32'h0000004B.
 
 - **TC6 — RPEAK_COUNT increments**: pulse rpeak_in 3 times.
-  AXI read offset 0x18. Assert read data == 32'h00000003.
+  AXI read offset 0x34. Assert read data == 32'h00000003.
 
 - **TC7 — Write read-only register ignored**: AXI write 0xDEAD to
-  offset 0x0C (ECG_RAW is read-only). Assert ecg_raw register unchanged.
+  offset 0x28 (ECG_RAW is read-only). Assert ecg_raw register unchanged.
 
 - **TC8 — Default values on reset**: assert rst_n=0, release.
-  Read BPM_CONFIG (0x00), assert == 32'h0000003C (default 60 BPM).
+  Read BPM_CH_A (0x00), assert == 32'h0000003C (default 60 BPM).
 
 Save waveform: `sim/results/axi_ecg_ctrl.vcd`
 
@@ -269,7 +278,7 @@ After running all tests, create this file:
 |---------------------|-----|------|------|----------------|
 | ecg_dds             |  6  |  ?   |  ?   |                |
 | spi_dac_driver      |  4  |  ?   |  ?   |                |
-| spi_adc_driver      |  3  |  ?   |  ?   |                |
+| i2c_adc_driver      |  3  |  ?   |  ?   |                |
 | fir_filter          |  5  |  ?   |  ?   |                |
 | rpeak_detector      |  6  |  ?   |  ?   |                |
 | axi_ecg_ctrl        |  8  |  ?   |  ?   |                |
