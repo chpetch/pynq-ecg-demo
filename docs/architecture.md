@@ -100,4 +100,48 @@ flowchart TD
 
 ---
 
-_Last updated: Milestone 1 — Signal Generation_
+## Signal Processing Pipeline
+
+### Flow
+
+```
+ADC (12-bit samples, 360 Hz)
+  │
+  ▼
+FIR Bandpass Filter  (31-tap, 0.5–40 Hz, Q1.15, Hamming window)
+  │  latency: 15 clock cycles
+  ▼
+R-Peak Detector  (Pan-Tompkins threshold, refractory = 72 samples)
+  │  outputs: bpm_out (16-bit), rpeak_detected (1-bit)
+  ▼
+AXI-Lite Registers  (base 0x43C00000)
+  │  readable by PS via PYNQ overlay
+  ▼
+PS / WebSocket → PC Dashboard
+```
+
+### Key Parameters
+
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| FIR taps | 31 | `handoffs/algorithm_spec.md` |
+| Passband | 0.5 – 40.0 Hz | algorithm_spec.md |
+| Window | Hamming | algorithm_spec.md |
+| Q format | Q1.15 (16-bit signed) | algorithm_spec.md |
+| Accumulator | 32-bit signed | algorithm_spec.md |
+| Output truncation | `acc >> 15`, bits [11:0] | algorithm_spec.md |
+| Filter latency | 15 clock cycles | algorithm_spec.md |
+| R-peak algorithm | Simplified Pan-Tompkins | algorithm_spec.md |
+| Detection threshold | 2983 (12-bit, 0.70 × max) | algorithm_spec.md |
+| Refractory period | 72 samples (200 ms @ 360 Hz) | algorithm_spec.md |
+| BPM formula | `(360 × 60) / sample_interval` | algorithm_spec.md |
+| Interval counter | 16-bit (saturates → BPM = 0) | algorithm_spec.md |
+| SNR improvement | 11.7 dB (validated) | `algo/validate_algorithm.py` |
+| R-peak detection rate | 100.0% on validation signal | algo/validate_algorithm.py |
+
+RTL implementation: `pl/fir_filter.v`, `pl/rpeak_detector.v` _(Milestone 3)_.
+Full algorithm detail: `docs/algorithm_summary.md`.
+
+---
+
+_Last updated: Milestone 2 — Algorithm Design_

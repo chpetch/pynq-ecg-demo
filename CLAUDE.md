@@ -7,7 +7,7 @@ Do not write any code or create any files until you have read it.
 
 ## Current Milestone
 <!-- UPDATE THIS MANUALLY AFTER EACH MILESTONE IS APPROVED -->
-CURRENT: 1 — Signal Generation complete
+CURRENT: 2 — Algorithm Design complete
 
 ## Active Agent Session
 <!-- UPDATE THIS WHEN SWITCHING AGENTS -->

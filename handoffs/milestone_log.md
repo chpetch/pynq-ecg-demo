@@ -27,3 +27,28 @@ Append a new entry after each user-approved milestone. Never delete earlier entr
 **Next agent must read:**
 - `handoffs/register_map.md` : pynq_ecg_process must extend this table from offset 0x28; must not redefine 0x00–0x24
 - `handoffs/adc_interface.md` : i2c_adc_driver timing and signal format
+
+---
+
+## Milestone 2 — Algorithm Design (2026-05-26)
+
+**Files produced:**
+- `algo/validate_algorithm.py` : generates noisy ECG, designs 31-tap FIR, simulates Q1.15 fixed-point, runs Pan-Tompkins detector, asserts SNR gain > 10 dB and detection rate > 95% — both PASS
+- `handoffs/algorithm_spec.md` : definitive algorithm spec with exact Q1.15 coefficient table, threshold, refractory period, BPM formula — pynq_ecg_process must implement these numbers exactly
+- `docs/algorithm_summary.md` : engineering doc with design rationale, coefficient table, validation results
+- `docs/architecture.md` : Signal Processing Pipeline section appended
+
+**Key decisions:**
+- FIR over IIR: linear phase, unconditionally stable, maps to DSP48 slices
+- 31 taps: minimum for −50 dB stopband at 50 Hz with Hamming window
+- Simplified Pan-Tompkins: threshold comparison only — no multipliers in RTL
+- Q1.15: 16-bit coefficients map directly to DSP48 18-bit inputs
+- Threshold raised to 0.70 × max (not 0.60) after validation to avoid false detections from powerline residual
+
+**Issues / retries:**
+- None — validation passed on first run (SNR gain 11.7 dB, 9/9 peaks = 100%)
+
+**Next agent must read:**
+- `handoffs/algorithm_spec.md` : FIR coefficients (h[0]–h[30]), threshold 2983, refractory 72 — implement exactly, no deviations
+- `handoffs/register_map.md` : add processing registers starting at 0x28; do not touch 0x00–0x24
+- `handoffs/adc_interface.md` : i2c_adc_driver interface spec
