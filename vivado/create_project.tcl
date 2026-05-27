@@ -275,8 +275,16 @@ puts "INFO: Block design validated and saved"
 puts "INFO: === Step 11: Generating HDL wrapper ==="
 
 make_wrapper -files [get_files ecg_system.bd] -top
-set wrapper [glob [file join $project_dir \
-    ${project_name}.srcs sources_1 bd ecg_system hdl ecg_system_wrapper.v]]
+# Vivado 2022.1+ puts generated files in .gen/ (older versions use .srcs/)
+set wrapper ""
+foreach d {gen srcs} {
+    set try [file join $project_dir \
+        ${project_name}.${d} sources_1 bd ecg_system hdl ecg_system_wrapper.v]
+    if {[file exists $try]} { set wrapper $try; break }
+}
+if {$wrapper eq ""} {
+    error "ERROR: Cannot find ecg_system_wrapper.v in .gen/ or .srcs/"
+}
 add_files -norecurse $wrapper
 set_property top ecg_system_wrapper [current_fileset]
 update_compile_order -fileset sources_1
@@ -318,15 +326,20 @@ puts "INFO: === Step 14: Exporting bitstream artifacts ==="
 
 set bit_src [file join $project_dir \
     ${project_name}.runs impl_1 ecg_system_wrapper.bit]
-set hwh_src [file join $project_dir \
-    ${project_name}.srcs sources_1 bd ecg_system hw_handoff ecg_system.hwh]
+# HWH: Vivado 2022.1+ uses .gen/, older uses .srcs/
+set hwh_src ""
+foreach d {gen srcs} {
+    set try [file join $project_dir \
+        ${project_name}.${d} sources_1 bd ecg_system hw_handoff ecg_system.hwh]
+    if {[file exists $try]} { set hwh_src $try; break }
+}
 set ps_dir  [file join $repo_root ps]
 
 if {![file exists $bit_src]} {
     error "ERROR: Bitstream not found at $bit_src"
 }
-if {![file exists $hwh_src]} {
-    error "ERROR: HWH file not found at $hwh_src"
+if {$hwh_src eq ""} {
+    error "ERROR: HWH file not found in .gen/ or .srcs/ hw_handoff/"
 }
 
 file copy -force $bit_src [file join $ps_dir ecg_demo.bit]
