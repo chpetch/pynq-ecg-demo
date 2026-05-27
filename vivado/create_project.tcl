@@ -24,7 +24,13 @@ set part         xc7z020clg400-1
 set board        tul.com.tw:pynq-z2:part0:1.0
 
 create_project $project_name $project_dir -part $part -force
-set_property board_part $board [current_project]
+# Board part is optional — only set if board files are installed
+if {[catch {set_property board_part $board [current_project]} err]} {
+    puts "WARNING: Board files for '$board' not found — continuing with part only ($part)"
+    puts "WARNING: To install: copy pynq-z2 folder to Vivado/2022.1/data/boards/board_files/"
+} else {
+    puts "INFO: Board part '$board' set"
+}
 
 puts "INFO: Project '$project_name' created in $project_dir"
 
@@ -54,14 +60,24 @@ update_compile_order -fileset sources_1
 # 3a — Zynq PS7
 puts "INFO:   Adding Zynq PS7..."
 set ps7 [create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 processing_system7_0]
-apply_bd_automation \
-    -rule xilinx.com:bd_rule:processing_system7 \
-    -config {make_external "FIXED_IO, DDR" apply_board_preset "1"} \
-    $ps7
+# apply_board_preset "1" requires board files; omit if not installed
+if {[catch {
+    apply_bd_automation \
+        -rule xilinx.com:bd_rule:processing_system7 \
+        -config {make_external "FIXED_IO, DDR" apply_board_preset "1"} \
+        $ps7
+} err]} {
+    puts "WARNING: Board preset not applied ($err) — applying minimal config"
+    apply_bd_automation \
+        -rule xilinx.com:bd_rule:processing_system7 \
+        -config {make_external "FIXED_IO, DDR"} \
+        $ps7
+}
 set_property -dict [list \
     CONFIG.PCW_USE_M_AXI_GP0            {1}   \
     CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {100} \
     CONFIG.PCW_USE_FABRIC_INTERRUPT     {0}   \
+    CONFIG.PCW_DDR_RAM_HIGHADDR         {0x1FFFFFFF} \
 ] $ps7
 
 # 3b — Processor System Reset
