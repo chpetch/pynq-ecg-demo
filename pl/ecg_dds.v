@@ -60,6 +60,12 @@ module ecg_dds (
     localparam DIV_BITS  = 32;
     localparam DIVIDEND  = 32'd100_000_000;
 
+    // 64-bit shifted divisor — prevents 32-bit overflow when div_bit > ~22.
+    // Continuous assignment; Vivado prunes unused high bits at synthesis.
+    // If div_shifted[63:32] != 0 the shifted value exceeds any 32-bit remainder,
+    // so the quotient bit is 0 and the step is skipped.
+    wire [63:0] div_shifted = {32'd0, divisor_reg} << div_bit;
+
     reg [31:0] base_reload;        // registered result
     reg [31:0] div_remainder;
     reg [31:0] div_quotient;
@@ -105,15 +111,13 @@ module ecg_dds (
     // -----------------------------------------------------------------------
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            base_reload   <= 32'd138888;  // 100M / (60*6) - 1 = 277777, /2 default
+            base_reload   <= 32'd277777;  // 100M/(60*6)-1; matches axi_ecg_ctrl BPM reset=60
             div_busy      <= 1'b0;
             div_bit       <= 6'd0;
             div_remainder <= 32'd0;
             div_quotient  <= 32'd0;
             divisor_reg   <= 32'd0;
-            bpm_prev      <= 8'd0;
-            // Correct reset value: 100M/(60*6)-1 = 277777
-            base_reload   <= 32'd277777;
+            bpm_prev      <= 8'd60;  // match axi_ecg_ctrl reset value; prevents spurious divide at startup
         end else begin
             if (bpm_config != bpm_prev && !div_busy) begin
                 // Start division
@@ -126,8 +130,10 @@ module ecg_dds (
             end else if (div_busy) begin
                 // Non-restoring step: check if remainder >= shifted divisor
                 // Simple restoring long division
-                if (div_remainder >= (divisor_reg << div_bit)) begin
-                    div_remainder <= div_remainder - (divisor_reg << div_bit);
+                // div_shifted is 64-bit (see wire above); skip step if high 32 bits non-zero
+                // (shifted divisor > any 32-bit remainder => quotient bit = 0)
+                if (div_shifted[63:32] == 32'd0 && div_remainder >= div_shifted[31:0]) begin
+                    div_remainder <= div_remainder - div_shifted[31:0];
                     div_quotient  <= div_quotient | (32'd1 << div_bit);
                 end
                 if (div_bit == 6'd0) begin

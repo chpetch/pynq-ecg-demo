@@ -193,3 +193,62 @@ Append a new entry after each user-approved milestone. Never delete earlier entr
 **Next steps (user action required):**
 - Flash board to PYNQ 3.0 image (current: PYNQ 2.5 — incompatible with ps/server.py + FastAPI)
 - Then deploy with `ps/deploy.sh <board_ip>` and start server with `ps/start_server.sh`
+
+---
+
+## Post-Milestone Hardware Debug Session (2026-05-27)
+
+**Context:** Tested with PYNQ 2.5 image using `ps/pynq25_capture.ipynb`. Overlay loads
+(FPGA programmed) but ECG_DAC read constant 2048. Two issues identified and fixed.
+
+### Issue 1 — JB pin reassignment (COMPLETE)
+`pl/constraints.xdc` corrected: adc_scl moved W11→V10, adc_sda moved W12→W10 so PMOD AD2
+seats cleanly in JB right half (JB3/JB4). Bitstream rebuilt successfully (3.9 MB).
+
+### Issue 2 — DDS divider overflow bug (FIXED, rebuild required)
+**Root cause:** `pl/ecg_dds.v` reset `bpm_prev <= 8'd0`, but `pl/axi_ecg_ctrl.v` resets
+`reg_bpm_ch_a <= 8'h3C (60)`. On first post-reset clock, `bpm_config=60 != bpm_prev=0`
+triggers the 32-bit sequential divider. For `div_bit=31`, `360<<31` overflows 32 bits →
+garbage quotient → `base_reload ≈ 4 billion` → phase counter takes ~43 s per ROM step →
+DDS frozen at ROM[0]=2048 (isoelectric baseline).
+
+**Fix applied to `pl/ecg_dds.v`:**
+1. `bpm_prev <= 8'd60` at reset (was `8'd0`) — no spurious divide on startup
+2. Added `wire [63:0] div_shifted` and skip-step guard `div_shifted[63:32] == 0` to
+   prevent overflow on any future BPM change
+3. Removed stale duplicate `base_reload <= 32'd138888` reset line
+
+**Syntax check:** `iverilog -t null -g2012 pl/ecg_dds.v pl/ecg_rom.v` — CLEAN
+
+### Hardware verified (PMOD loopback test)
+`ps/pmod_test.py` (new file) tested both PMODs with PYNQ base overlay:
+- PMOD DA4 SPI: bit-banged 5 codes to channel A — OK
+- PMOD AD2 I2C: 10 samples read @ expected voltage — OK
+- Loopback sweep DAC 0→4095 → ADC tracked monotonically within 3 LSB — **PASS**
+- Confirms ECG_DAC=2048 is RTL-only; hardware is not at fault.
+
+**PYNQ 2.5 API learnings:**
+- `Pmod_IIC(if_id, scl_pin, sda_pin, iic_addr)` — addr is 4th positional arg
+- `iic.send([data])` — no length/addr args; `iic.receive(n)` — no addr arg
+- `python3` required (not `python`); `sudo` required for all PYNQ scripts
+
+### Files added / changed this session
+| File | Change |
+|------|--------|
+| `pl/ecg_dds.v` | Fix bpm_prev reset + 64-bit divider overflow guard |
+| `pl/constraints.xdc` | JB pin reassignment (adc_scl→V10, adc_sda→W10) |
+| `ps/pmod_test.py` | New — PMOD hardware loopback test (base overlay) |
+| `ps/pynq25_capture.ipynb` | New — 5-cell PYNQ 2.5 waveform capture notebook |
+| `pc/mock_server.py` | New — PC-side mock board server for offline dashboard testing |
+| `pc/requirements.txt` | Added fastapi, uvicorn, numpy, scipy |
+| `pc/README_dashboard.md` | Added mock server usage instructions |
+| `docs/wiring_guide.md` | Corrected PMOD AD2 from XADC→I2C; updated JB pin refs |
+| `docs/setup_guide.md` | Updated JB pin description |
+| `docs/architecture.md` | Updated JB pin refs |
+| `docs/resource_utilisation.md` | Updated IO pin table |
+
+**Next steps:**
+1. Rebuild bitstream with fixed `ecg_dds.v` — run `vivado -mode batch -source vivado/create_project.tcl` from Vivado Command Prompt (~22 min)
+2. Copy new `ps/ecg_demo.bit` + `ps/ecg_demo.hwh` to board and re-run `pynq25_capture.ipynb`
+3. Confirm ECG_DAC cycles through ROM values (QRS visible, not stuck at 2048)
+4. Flash board to PYNQ 3.0 for full server + dashboard test
