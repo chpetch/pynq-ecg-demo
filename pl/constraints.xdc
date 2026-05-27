@@ -13,10 +13,14 @@
 #   JA[2] = (unused)
 #
 # JB Header — PMOD AD2 (AD7991-0) I2C ADC
-#   JB[0] = ADC_SDA    (I2C data, bidirectional open-drain)
-#   JB[1] = ADC_SCL    (I2C clock, output)
-#   JB[2] = (unused)
-#   JB[3] = (unused)
+#   JB[0] = (unused)
+#   JB[1] = (unused)
+#   JB[2] = ADC_SCL    (I2C clock, output)                  ← right half, Pin 1
+#   JB[3] = ADC_SDA    (I2C data, bidirectional open-drain)  ← right half, Pin 2
+#
+# PMOD AD2 pinout: Pin 1 = SCL, Pin 2 = SDA (Digilent I2C PMOD standard).
+# PMOD AD2 plugs directly into the RIGHT half of JB (physical pins JB3/JB4).
+# Moved from JB[0]/JB[1] so the module seats without jumper wires.
 #
 # PYNQ-Z2 JA schematic net names and package pins:
 #   JA1 / JA[0]  -> V15
@@ -31,8 +35,8 @@
 # PYNQ-Z2 JB schematic net names and package pins:
 #   JB1 / JB[0]  -> W12
 #   JB2 / JB[1]  -> W11
-#   JB3 / JB[2]  -> V10  (unused)
-#   JB4 / JB[3]  -> W10  (unused)
+#   JB3 / JB[2]  -> V10  ← ADC_SCL (PMOD Pin 1)
+#   JB4 / JB[3]  -> W10  ← ADC_SDA (PMOD Pin 2)
 #   JB7 / JB[4]  -> V12  (unused)
 #   JB8 / JB[5]  -> W13  (unused)
 #   JB9 / JB[6]  -> T15  (unused)
@@ -59,20 +63,20 @@ set_property DRIVE 8 [get_ports {DAC_SCLK}]
 # JB Header — ADC I2C (ecg_process_top)
 # ==============================================================================
 
-# JB[0] — ADC_SDA (I2C data, bidirectional)
-set_property PACKAGE_PIN W12 [get_ports {adc_sda}]
-set_property IOSTANDARD  LVCMOS33 [get_ports {adc_sda}]
-
-# JB[1] — ADC_SCL (I2C clock, output)
-set_property PACKAGE_PIN W11 [get_ports {adc_scl}]
+# JB[2] — ADC_SCL (I2C clock, output) — physical pin JB3 = V10  [PMOD Pin 1]
+set_property PACKAGE_PIN V10 [get_ports {adc_scl}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_scl}]
 set_property DRIVE 8 [get_ports {adc_scl}]
+
+# JB[3] — ADC_SDA (I2C data, bidirectional) — physical pin JB4 = W10  [PMOD Pin 2]
+set_property PACKAGE_PIN W10 [get_ports {adc_sda}]
+set_property IOSTANDARD  LVCMOS33 [get_ports {adc_sda}]
 
 # ==============================================================================
 # DRC overrides
 # ==============================================================================
 
-# UCIO-1: adc_sda is an inout (open-drain I2C) — pin W12 IS constrained above.
+# UCIO-1: adc_sda is an inout (open-drain I2C) — pin W10 IS constrained above.
 # Vivado's write_bitstream DRC is overly strict with inout ports from block
 # designs. Downgrade to warning so bitstream generation proceeds.
 # This is the Xilinx-recommended workaround (see DRC UCIO-1 error message).
