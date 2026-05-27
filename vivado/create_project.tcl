@@ -139,6 +139,11 @@ connect_bd_net \
     [get_bd_pins $ps7/FCLK_CLK0] \
     [get_bd_pins $ecg_proc/s_axi_aclk]
 
+# PS7 M_AXI_GP0_ACLK must be driven (AXI master clock — easy to miss)
+connect_bd_net \
+    [get_bd_pins $ps7/FCLK_CLK0] \
+    [get_bd_pins $ps7/M_AXI_GP0_ACLK]
+
 # ecg_signal_gen_top clock
 connect_bd_net \
     [get_bd_pins $ps7/FCLK_CLK0] \
