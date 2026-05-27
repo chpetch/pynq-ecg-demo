@@ -162,4 +162,26 @@ Append a new entry after each user-approved milestone. Never delete earlier entr
 **Next agent must read:**
 - N/A — this is the final milestone. All handoff files remain valid for reference.
 
-Note: Milestone 6 (Vivado Synthesis) agent spec is written (`vivado/create_project.tcl` TCL to be generated when user runs pynq_vivado agent with Vivado 2022.1+ installed).
+---
+
+## Milestone 6 — Vivado Synthesis (2026-05-27)
+
+**Files produced:**
+- `vivado/create_project.tcl` : fully unattended Vivado batch script — creates block design, runs synth + impl + bitstream, exports `ps/ecg_demo.bit` + `ps/ecg_demo.hwh`
+- `vivado/README.md` : board file install guide, one-command run, expected runtime (~30 min), troubleshooting table
+
+**Key decisions:**
+- Single AXI slave: `ecg_process_top` owns the entire register map (0x00–0x40); `ecg_signal_gen_top` has NO AXI interface — receives BPM/fluct as plain output wires from `ecg_process_top`
+- External port names match `pl/constraints.xdc` exactly: `DAC_CS_N`, `DAC_DIN`, `DAC_SCLK`, `adc_sda`, `adc_scl`
+- ecg_process_top has dual clock inputs (`clk` and `s_axi_aclk`) — both driven from `FCLK_CLK0`
+- ecg_process_top has dual reset inputs (`rst_n` and `s_axi_aresetn`) — both driven from `peripheral_aresetn`
+- Build artifacts go to `vivado/build/` (git-ignored); only `ps/ecg_demo.bit` and `ps/ecg_demo.hwh` are the deliverables
+- `vivado/build/` added to `.gitignore`; `ps/*.bit` and `ps/*.hwh` already ignored
+
+**Issues / retries:**
+- None — TCL written from source file analysis, not spawned from registered agent (pynq-vivado is not in FleetView)
+
+**Next steps (user action required):**
+- Run `vivado -mode batch -source vivado/create_project.tcl` with Vivado 2022.1+
+- Flash board to PYNQ 3.0 image (current: PYNQ 2.5 — incompatible with ps/server.py)
+- Deploy with `ps/deploy.sh <board_ip>` once both above are done

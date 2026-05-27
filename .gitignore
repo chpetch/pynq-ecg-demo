@@ -6,6 +6,7 @@
 *.bit
 *.hwh
 vivado_project/
+vivado/build/
 
 # Python
 __pycache__/
