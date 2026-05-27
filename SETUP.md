@@ -10,9 +10,7 @@
 | cocotb | Python testbench framework | Free |
 | GTKWave | Waveform viewer | Free |
 | Python 3.10+ | All scripting | Free |
-| Claude Code | Claude agents (orchestrator, RTL, algo, sim) | Claude subscription |
-| Aider | Gemini agents (PS server, GUI, docs) | Free tool |
-| Gemini API key | Gemini 2.5 Pro via Aider | Google AI Pro subscription |
+| Claude Code | Claude agents (orchestrator, RTL, algo, sim, server, GUI, docs) | Claude subscription |
 
 ---
 
@@ -95,22 +93,7 @@ Sign in with your Claude subscription account on first run.
 
 ---
 
-## 5. Antigravity CLI (for Gemini agents)
-
-```powershell
-# Install via official installer (PowerShell)
-irm https://antigravity.google/cli/install.ps1 | iex
-
-# Sign in with your Google account
-agy auth login
-
-# Verify
-agy --version
-```
-
----
-
-## 6. Project Python Dependencies (PC side)
+## 5. Project Python Dependencies (PC side)
 
 ```bash
 pip install streamlit plotly websockets requests fastapi uvicorn
@@ -118,7 +101,7 @@ pip install streamlit plotly websockets requests fastapi uvicorn
 
 ---
 
-## 7. Recommended .claudeignore Templates
+## 6. Recommended .claudeignore Templates
 
 Save these and swap them when switching agent sessions.
 
@@ -169,7 +152,7 @@ cp scripts/ignore_for_gen.txt .claudeignore
 
 ---
 
-## 8. Verify Everything
+## 7. Verify Everything
 
 ```bash
 # Run this checklist before starting
@@ -179,23 +162,21 @@ python3 -c "import cocotb" && echo "cocotb ok"
 python3 -c "import numpy, scipy, neurokit2" && echo "Python DSP ok"
 python3 -c "import streamlit, plotly, websockets" && echo "GUI stack ok"
 claude --version
-aider --version
 echo "=== All checks done ==="
 ```
 
 ---
 
-## 9. Folder Initialisation
+## 8. Folder Initialisation
 
 ```bash
 git clone <your-repo> pynq-ecg-demo   # or mkdir pynq-ecg-demo
 cd pynq-ecg-demo
 
 # Create folder structure
-mkdir -p agents handoffs algo pl sim ps pc docs scripts
+mkdir -p handoffs algo pl sim ps pc docs scripts
 
-# Copy agent prompts into agents/
-# (download from wherever you stored them)
+# Agent prompts are in .claude/agents/ — already versioned with the repo
 
 # Start orchestrator
 claude
@@ -208,7 +189,6 @@ claude
 | Action | Command |
 |---|---|
 | Start Claude agent session | `claude` |
-| Start Gemini agent session | `agy` |
 | Run all simulations | `cd sim && ./run_all.sh` |
 | Deploy PS server to board | `cd ps && ./deploy.sh 192.168.2.99` |
 | Start dashboard | `cd pc && ./run_dashboard.sh` |

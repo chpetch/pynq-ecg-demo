@@ -1,0 +1,9 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1779779804" />
+    <testcase name="tc1_transfer_format" classname="test_spi_dac" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_spi_dac/test_spi_dac.py" lineno="89" time="0.006757974624633789" sim_time_ns="1110.0" ratio_time="164250.39477862057" />
+    <testcase name="tc2_sync_n_timing" classname="test_spi_dac" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_spi_dac/test_spi_dac.py" lineno="122" time="0.03262805938720703" sim_time_ns="7940.0" ratio_time="243348.8276386169" />
+    <testcase name="tc3_busy_flag" classname="test_spi_dac" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_spi_dac/test_spi_dac.py" lineno="175" time="0.030274391174316406" sim_time_ns="7940.0" ratio_time="262267.86706567963" />
+    <testcase name="tc4_ignored_during_busy" classname="test_spi_dac" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_spi_dac/test_spi_dac.py" lineno="206" time="0.36882638931274414" sim_time_ns="100180.0" ratio_time="271618.3085127701" />
+  </testsuite>
+</testsuites>

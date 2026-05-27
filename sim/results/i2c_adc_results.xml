@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1779799155" />
+    <testcase name="tc1_read_sequence" classname="test_i2c_adc" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_i2c_adc/test_i2c_adc.py" lineno="235" time="0.5576596260070801" sim_time_ns="122660.0" ratio_time="219954.9586873673" />
+    <testcase name="tc2_scl_frequency" classname="test_i2c_adc" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_i2c_adc/test_i2c_adc.py" lineno="270" time="0.03082895278930664" sim_time_ns="6420.0" ratio_time="208245.8020509489" />
+    <testcase name="tc3_valid_pulse_width" classname="test_i2c_adc" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_i2c_adc/test_i2c_adc.py" lineno="310" time="0.5559322834014893" sim_time_ns="122680.00000000001" ratio_time="220674.35848369618" />
+  </testsuite>
+</testsuites>

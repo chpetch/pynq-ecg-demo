@@ -80,3 +80,32 @@ Append a new entry after each user-approved milestone. Never delete earlier entr
 - `handoffs/register_map.md` : full register map for AXI access from PS
 - `handoffs/ws_schema.json` : WebSocket payload schema — ps_server and gui both depend on this
 - `handoffs/adc_interface.md` : sample rate and signal format
+
+---
+
+## Milestone 4 — Simulation (2026-05-27)
+
+**Files produced:**
+- `sim/test_ecg_dds/test_ecg_dds.py` : 6 test cases — BPM rate, BPM scaling, waveform continuity, RR fluctuation, amplitude fluctuation, reset behaviour
+- `sim/test_spi_dac/test_spi_dac.py` : 4 test cases — transfer format, SYNC_N timing, busy flag, ignore-during-busy
+- `sim/test_i2c_adc/test_i2c_adc.py` : 3 test cases — I2C read sequence, SCL frequency, valid pulse width
+- `sim/test_fir_filter/test_fir_filter.py` : 5 test cases — impulse response, passband pass, stopband attenuation, latency, no overflow
+- `sim/test_rpeak_detector/test_rpeak_detector.py` : 6 test cases — single peak, refractory block, two peaks, BPM calculation, no signal, configurable threshold
+- `sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py` : 8 test cases — write config registers, read status registers, read-only enforcement, reset defaults
+- `sim/run_all.sh` : single-command test runner
+- `handoffs/simulation_results.md` : 32 pass, 0 fail
+- `docs/simulation_report.md` : toolchain, results table, coverage notes
+
+**Key decisions:**
+- cocotb 2.0.1 installed with `COCOTB_IGNORE_PYTHON_REQUIRES=1` (WSL has Python 3.14, cocotb max is 3.13)
+- Manual AXI driver used in test_axi_ecg_ctrl (cocotb 2.x AxiLiteMaster API changed)
+- Waveforms saved as FST (cocotb 2.x default) — use `gtkwave sim/test_*/sim_build/*.fst` to view
+- test_ecg_dds TC3/TC5 simulate 100M+ cycles — avoid re-running unless necessary
+
+**Issues / retries:**
+- cocotb-config not in WSL PATH when called from Windows PowerShell — fixed by using `python3 -m cocotb_tools.config` in all Makefiles
+- ecg_dds FST file grew to 1 GB (TC5 simulates 122M cycles) — corrupted on session cut-off; replaced with `sim/test_ecg_dds_quick/` for fast waveform viewing
+
+**Next agent must read:**
+- `handoffs/register_map.md` : all AXI offsets 0x00–0x40 — especially the multi-channel BPM registers (0x00–0x24) and ECG_DAC at 0x40
+- `handoffs/ws_schema.json` : exact JSON payload including `ecg_dac` field

@@ -8,8 +8,8 @@ Board: PYNQ-Z2 (Zynq xc7z020)
 DAC: PmodDA4 on JA (AD5628-1, SPI, 12-bit)
 ADC: PmodAD2 on JB (AD7991-0, I2C, 12-bit)
 Loopback: DAC output physically wired to ADC input
-Pipeline
 
+Pipeline
 
 ECG ROM → DDS → SPI DAC → [analog loopback] → I2C ADC → FIR Filter → R-peak Detector → AXI → PS → WebSocket → Dashboard
 Stack

@@ -1,0 +1,11 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1779854664" />
+    <testcase name="tc1_single_peak_detected" classname="test_rpeak_detector" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_rpeak_detector/test_rpeak_detector.py" lineno="63" time="0.015244722366333008" sim_time_ns="350.0" ratio_time="22958.765111587243" />
+    <testcase name="tc2_refractory_period" classname="test_rpeak_detector" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_rpeak_detector/test_rpeak_detector.py" lineno="99" time="0.008836030960083008" sim_time_ns="1770.0000000000002" ratio_time="200316.1835892178" />
+    <testcase name="tc3_two_peaks_detected" classname="test_rpeak_detector" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_rpeak_detector/test_rpeak_detector.py" lineno="148" time="0.012132883071899414" sim_time_ns="2290.0000000000005" ratio_time="188743.26789679503" />
+    <testcase name="tc4_bpm_calculation" classname="test_rpeak_detector" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_rpeak_detector/test_rpeak_detector.py" lineno="194" time="0.044728994369506836" sim_time_ns="9370.0" ratio_time="209483.80646777572" />
+    <testcase name="tc5_no_signal" classname="test_rpeak_detector" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_rpeak_detector/test_rpeak_detector.py" lineno="241" time="0.20403528213500977" sim_time_ns="40150.0" ratio_time="196779.69211929152" />
+    <testcase name="tc6_configurable_threshold" classname="test_rpeak_detector" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_rpeak_detector/test_rpeak_detector.py" lineno="268" time="0.0017459392547607422" sim_time_ns="360.0" ratio_time="206192.74068004917" />
+  </testsuite>
+</testsuites>

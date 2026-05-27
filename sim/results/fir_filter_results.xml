@@ -1,0 +1,10 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1779854199" />
+    <testcase name="tc1_impulse_response" classname="test_fir_filter" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_fir_filter/test_fir_filter.py" lineno="108" time="0.030753612518310547" sim_time_ns="660.0" ratio_time="21460.893402589347" />
+    <testcase name="tc2_passband_signal_passes" classname="test_fir_filter" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_fir_filter/test_fir_filter.py" lineno="137" time="0.013574600219726562" sim_time_ns="1670.0000000000002" ratio_time="123023.88084867221" />
+    <testcase name="tc3_stopband_attenuation" classname="test_fir_filter" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_fir_filter/test_fir_filter.py" lineno="173" time="0.013139963150024414" sim_time_ns="1670.0" ratio_time="127093.20269264965" />
+    <testcase name="tc4_latency" classname="test_fir_filter" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_fir_filter/test_fir_filter.py" lineno="208" time="0.004693269729614258" sim_time_ns="669.9999999999995" ratio_time="142757.6164592328" />
+    <testcase name="tc5_no_overflow" classname="test_fir_filter" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_fir_filter/test_fir_filter.py" lineno="256" time="0.010378837585449219" sim_time_ns="1360.0" ratio_time="131035.86878618028" />
+  </testsuite>
+</testsuites>

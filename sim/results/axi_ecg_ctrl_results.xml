@@ -1,0 +1,13 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1779779047" />
+    <testcase name="tc1_write_bpm_ch_a" classname="test_axi_ecg_ctrl" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py" lineno="114" time="0.003282308578491211" sim_time_ns="230.0" ratio_time="70072.63165540787" />
+    <testcase name="tc2_write_rr_fluct" classname="test_axi_ecg_ctrl" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py" lineno="132" time="0.0013666152954101562" sim_time_ns="239.99999999999997" ratio_time="175616.35729239357" />
+    <testcase name="tc3_write_amp_fluct" classname="test_axi_ecg_ctrl" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py" lineno="148" time="0.0013647079467773438" sim_time_ns="239.99999999999994" ratio_time="175861.80293501043" />
+    <testcase name="tc4_read_ecg_raw" classname="test_axi_ecg_ctrl" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py" lineno="164" time="0.00125885009765625" sim_time_ns="230.0" ratio_time="182706.42424242425" />
+    <testcase name="tc5_read_bpm_out" classname="test_axi_ecg_ctrl" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py" lineno="181" time="0.0012922286987304688" sim_time_ns="229.9999999999999" ratio_time="177987.07011070102" />
+    <testcase name="tc6_rpeak_count_increments" classname="test_axi_ecg_ctrl" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py" lineno="198" time="0.0015115737915039062" sim_time_ns="270.0" ratio_time="178621.77917981072" />
+    <testcase name="tc7_write_readonly_ignored" classname="test_axi_ecg_ctrl" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py" lineno="221" time="0.0018463134765625" sim_time_ns="320.0" ratio_time="173318.34710743802" />
+    <testcase name="tc8_default_values_on_reset" classname="test_axi_ecg_ctrl" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_axi_ecg_ctrl/test_axi_ecg_ctrl.py" lineno="244" time="0.0010685920715332031" sim_time_ns="180.0" ratio_time="168445.9437751004" />
+  </testsuite>
+</testsuites>

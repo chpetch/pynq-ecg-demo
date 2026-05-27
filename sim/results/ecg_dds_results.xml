@@ -1,0 +1,15 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1779856009" />
+    <testcase name="tc1_default_bpm_rate" classname="test_ecg_dds" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_ecg_dds/test_ecg_dds.py" lineno="99" time="22.495129823684692" sim_time_ns="5555670.0" ratio_time="246972.12434624587" />
+    <testcase name="tc2_bpm_scaling" classname="test_ecg_dds" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_ecg_dds/test_ecg_dds.py" lineno="128" time="0.0033893585205078125" sim_time_ns="700.0" ratio_time="206528.75633089477" />
+    <testcase name="tc3_waveform_continuity" classname="test_ecg_dds" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_ecg_dds/test_ecg_dds.py" lineno="182" time="209.0556447505951" sim_time_ns="63889060.0" ratio_time="305607.91638140223" />
+    <testcase name="tc4_rr_fluctuation" classname="test_ecg_dds" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_ecg_dds/test_ecg_dds.py" lineno="212" time="21.88344430923462" sim_time_ns="5556040.0" ratio_time="253892.39104629433" />
+    <testcase name="tc5_amplitude_fluctuation" classname="test_ecg_dds" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_ecg_dds/test_ecg_dds.py" lineno="270" time="33.802953243255615" sim_time_ns="6427195.0" ratio_time="190137.08517560837">
+      <failure error_type="SimFailure" error_msg="Simulator shut down prematurely" />
+    </testcase>
+    <testcase name="tc6_reset_behaviour" classname="test_ecg_dds" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_ecg_dds/test_ecg_dds.py" lineno="333" time="0" sim_time_ns="0" ratio_time="nan">
+      <failure error_type="SimFailure" error_msg="Simulator shut down prematurely" />
+    </testcase>
+  </testsuite>
+</testsuites>

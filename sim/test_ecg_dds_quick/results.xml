@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1779857859" />
+    <testcase name="quick_waveform" classname="test_ecg_dds_quick" file="/mnt/d/programming/projects/pynq-ecg-demo/sim/test_ecg_dds_quick/test_ecg_dds_quick.py" lineno="6" time="1116.2338044643402" sim_time_ns="275825895.0" ratio_time="247104.0510481258">
+      <failure error_type="SimFailure" error_msg="Simulator shut down prematurely" />
+    </testcase>
+  </testsuite>
+</testsuites>
