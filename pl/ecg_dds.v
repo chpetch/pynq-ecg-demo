@@ -145,7 +145,7 @@ module ecg_dds (
     // -----------------------------------------------------------------------
     // actual_reload computation (combinational, updated each cycle)
     // -----------------------------------------------------------------------
-    always @(*) begin
+    always @(*) begin : rr_fluct_comb
         // (lfsr1 * rr_fluct) is 16-bit, >>8 gives 8-bit delta
         // subtract (rr_fluct >> 1) to centre the fluctuation
         // signed arithmetic: use 32-bit
@@ -210,7 +210,7 @@ module ecg_dds (
                 // Compute amplitude scale factor
                 // scale = 256 + ((lfsr2*amp_fluct)>>8) - (amp_fluct>>1)
                 // Use 16-bit intermediates
-                begin
+                begin : amp_scale_comb
                     reg [15:0] amp_product;
                     reg [8:0]  amp_delta;
                     reg [8:0]  amp_offset;
