@@ -43,8 +43,8 @@ _Estimated figures from RTL analysis. Actual figures require Vivado synthesis + 
 | `dac_cs_n` | V15 (JA[0]) | Output |
 | `dac_din`  | W15 (JA[1]) | Output |
 | `dac_sclk` | T10 (JA[3]) | Output |
-| `adc_sda`  | W12 (JB[0]) | Inout  |
-| `adc_scl`  | W11 (JB[1]) | Output |
+| `adc_scl`  | V10 (JB[2]) | Output |
+| `adc_sda`  | W10 (JB[3]) | Inout  |
 | _(2 reserved)_ | — | — |
 
 ---

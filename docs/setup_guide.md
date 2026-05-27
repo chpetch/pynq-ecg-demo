@@ -58,7 +58,7 @@ Full pin-level details are in `docs/wiring_guide.md`. Summary:
 | Connection | From | To |
 |---|---|---|
 | PMOD DA4 (SPI DAC) | JA header pins 1, 2, 4 (CS, DIN, SCLK) | PMOD DA4 module |
-| PMOD AD2 (I²C ADC) | JB header pins 1, 2 (SDA, SCL) | PMOD AD2 module |
+| PMOD AD2 (I²C ADC) | JB right half: pins 3, 4 (SCL=JB[2]/V10, SDA=JB[3]/W10) | PMOD AD2 module |
 | Loopback wire | PMOD DA4 VOUT Ch A | PMOD AD2 VIN+ |
 | Common ground | PMOD DA4 GND | PMOD AD2 GND |
 

@@ -177,7 +177,7 @@ Full algorithm detail: `docs/algorithm_summary.md`.
 | `ecg_process_top_0` rr_fluct | `ecg_signal_gen_top_0` rr_fluct | HRV magnitude [7:0] |
 | `ecg_process_top_0` amp_fluct | `ecg_signal_gen_top_0` amp_fluct | Amplitude variation [7:0] |
 | `ecg_signal_gen_top_0` dac_cs_n / dac_sclk / dac_din | Board pins V15 / T10 / W15 (JA) | SPI to PMOD DA4 |
-| `ecg_process_top_0` adc_sda / adc_scl | Board pins W12 / W11 (JB) | I2C to PMOD AD2 |
+| `ecg_process_top_0` adc_scl / adc_sda | Board pins V10 / W10 (JB[2]/JB[3], right half) | I2C to PMOD AD2 |
 
 ### Address Editor Settings
 

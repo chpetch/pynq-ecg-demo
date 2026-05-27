@@ -6,7 +6,7 @@
 |---|---|
 | PYNQ-Z2 board | With SD card loaded with PYNQ 3.0 image |
 | PMOD DA4 (AD5628-1) | 8-channel 12-bit SPI DAC |
-| PMOD AD2 | XADC-compatible differential/single-ended ADC |
+| PMOD AD2 (AD7991-0) | I²C 12-bit ADC, 4-channel single-ended, 0–VCC range |
 | 1× jumper wire | DAC VOUT (Ch A) to ADC VIN loopback |
 
 ---
@@ -28,18 +28,24 @@ The PMOD DA4 plugs into the **JA** header on the PYNQ-Z2.
 
 ---
 
-## PMOD AD2 Connections (JB Header)
+## PMOD AD2 Connections (JB Header — right half)
 
-The PMOD AD2 plugs into the **JB** header on the PYNQ-Z2.
+The PMOD AD2 plugs into the **right half of JB** (physical pins JB3/JB4).
+This aligns the module's GND/VCC to the host power rails with no jumper wires.
 
-| PMOD AD2 Pin | JB Header Pin | Signal Name | Direction |
-|---|---|---|---|
-| 1 (VIN+) | JB[0] | `adc_vin_p` | ADC → PL (XADC) |
-| 2 (VIN−) | JB[1] | `adc_vin_n` | ADC → PL (XADC) |
-| 3 (NC) | JB[2] | — | — |
-| 4 (NC) | JB[3] | — | — |
-| 5 (GND) | JB GND | GND | — |
-| 6 (VCC) | JB VCC | 3.3 V | — |
+> **PMOD AD2 (AD7991-0) uses I²C — not XADC.**
+> Digilent I²C PMOD standard: Pin 1 = SCL, Pin 2 = SDA.
+
+| PMOD AD2 Pin | JB Header Pin | FPGA Pin | Signal Name | Direction |
+|---|---|---|---|---|
+| 1 (SCL) | JB[2] / JB3 | V10 | `adc_scl` | PL → ADC |
+| 2 (SDA) | JB[3] / JB4 | W10 | `adc_sda` | Bidirectional (open-drain) |
+| 3 (NC) | — | — | — | — |
+| 4 (NC) | — | — | — | — |
+| 5 (GND) | JB GND | — | GND | — |
+| 6 (VCC) | JB VCC | — | 3.3 V | — |
+
+> JB[0] and JB[1] (left half, pins JB1/JB2) are **not used** for the ADC.
 
 ---
 
@@ -49,10 +55,12 @@ Connect the DAC Ch A analog output to the ADC input with a single jumper wire:
 
 | From | To | Notes |
 |---|---|---|
-| PMOD DA4 VOUT (Ch A) | PMOD AD2 VIN+ | ECG analog signal, 0–2.5 V |
+| PMOD DA4 VOUT (Ch A) | PMOD AD2 CH0 (VIN) | ECG analog signal, 0–2.5 V |
 | PMOD DA4 GND | PMOD AD2 GND | Common ground reference |
 
-**Voltage range note:** The AD5628-1 uses a 2.5 V internal reference; DAC output spans 0 V (code 0x000) to 2.5 V (code 0xFFF). The PMOD AD2 / XADC auxiliary input accepts 0–1.0 V differential or 0–3.3 V single-ended. Check the PMOD AD2 schematic — if no built-in attenuator is present, a 2:1 resistor divider (e.g., 10 kΩ + 10 kΩ) is required to scale the 2.5 V full-scale down to the 1.0 V XADC range.
+**Voltage range note:** The AD5628-1 DAC output spans 0–2.5 V (2.5 V internal Vref).
+The AD7991-0 ADC on PMOD AD2 accepts 0–VCC (0–3.3 V) single-ended per channel.
+No voltage divider is needed — 2.5 V is within the 3.3 V ADC range.
 
 ---
 
@@ -62,4 +70,4 @@ Connect the DAC Ch A analog output to the ADC input with a single jumper wire:
 
 ---
 
-_Last updated: Milestone 1 — Signal Generation_
+_Last updated: post-M6 fix — JB pin reassignment (SCL→V10/JB[2], SDA→W10/JB[3])_
