@@ -7,7 +7,7 @@ Do not write any code or create any files until you have read it.
 
 ## Current Milestone
 <!-- UPDATE THIS MANUALLY AFTER EACH MILESTONE IS APPROVED -->
-CURRENT: 4 — Simulation complete
+CURRENT: 7 — GUI Dashboard complete (M6 Vivado pending hardware)
 
 ## Active Agent Session
 <!-- UPDATE THIS WHEN SWITCHING AGENTS -->
@@ -20,6 +20,7 @@ handoffs/   ← shared contracts between agents (register map, schemas, specs)
 algo/       ← algorithm validation scripts and plots
 pl/         ← Verilog RTL source files
 sim/        ← cocotb testbenches and results
+vivado/     ← TCL synthesis scripts (create_project.tcl, README.md)
 ps/         ← Python PS server and Jupyter notebooks
 pc/         ← Streamlit dashboard
 docs/       ← generated documentation

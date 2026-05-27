@@ -109,3 +109,57 @@ Append a new entry after each user-approved milestone. Never delete earlier entr
 **Next agent must read:**
 - `handoffs/register_map.md` : all AXI offsets 0x00–0x40 — especially the multi-channel BPM registers (0x00–0x24) and ECG_DAC at 0x40
 - `handoffs/ws_schema.json` : exact JSON payload including `ecg_dac` field
+
+---
+
+## Milestone 5 — PS Server (2026-05-27)
+
+**Files produced:**
+- `ps/server.py` : FastAPI app — loads PYNQ overlay, polls AXI registers at 360 Hz, streams JSON over WebSocket on `/ws`, accepts config via `POST /config`, reports status via `GET /status`
+- `ps/requirements.txt` : `fastapi`, `uvicorn[standard]`, `pynq>=3.0`
+- `ps/overlay_test.ipynb` : 5-cell Jupyter diagnostic — load overlay, read all 17 registers, write BPM_CH_A=90, poll ECG_RAW 10×, check STATUS
+- `ps/deploy.sh` : rsync project to board over SSH
+- `ps/start_server.sh` : starts uvicorn on port 5000
+
+**Key decisions:**
+- FastAPI + asyncio throughout — no threading, avoids GIL issues with PYNQ overlay
+- Full 17-register map (0x00–0x40) including ECG_DAC at 0x40
+- Default detect_threshold set to 2983 (0xBA7) at startup per algorithm_spec.md
+- WebSocket payload includes `ecg_dac` field for DAC monitor trace in GUI
+- CORS enabled (all origins) for browser-based dashboard access
+- Graceful shutdown: SIGTERM handler closes WebSocket connections before exit
+
+**Issues / retries:**
+- Original pynq_ps_server.md spec had wrong AXI offsets (9-register old map); corrected to full 17-register map before agent was spawned
+- Board has PYNQ 2.5 (not 3.0) — cannot test on hardware until board is upgraded to PYNQ 3.0 image
+
+**Next agent must read:**
+- `handoffs/ws_schema.json` : WebSocket payload — GUI must consume all fields
+- `handoffs/register_map.md` : full register map for slider ranges in GUI
+
+---
+
+## Milestone 7 — GUI Dashboard (2026-05-27)
+
+**Files produced:**
+- `pc/dashboard.py` : Streamlit single-file app (488 lines) — live ECG chart with DAC/raw/filtered traces + R-peak markers, BPM metric, config sliders, CSV export
+- `pc/requirements.txt` : `streamlit>=1.32`, `plotly>=5.18`, `websockets>=12.0`, `requests>=2.31`
+- `pc/run_dashboard.sh` : `streamlit run dashboard.py --server.port 8501 --server.headless false`
+- `pc/README_dashboard.md` : install + run instructions, endpoint summary
+
+**Key decisions:**
+- All mutable state in `st.session_state` — no module-level globals
+- WebSocket client runs in daemon background thread via `asyncio.run()` with `threading.Lock` for buffer access
+- Second background thread fires `st.rerun()` every 100 ms — main Streamlit thread never calls `time.sleep()`
+- Chart rendered into `st.empty()` placeholder, rebuilt each rerun from lock-protected deque snapshot
+- `[Apply Config]` POSTs `{"bpm_ch_a", "rr_fluct", "amp_fluct", "detect_threshold"}` — slider changes do not auto-send
+- CSV export: `timestamp_ms, ecg_raw, ecg_dac, ecg_filtered, bpm, rpeak`
+- On first connect: `GET /status` populates slider defaults from board
+
+**Issues / retries:**
+- None — produced on first spawn
+
+**Next agent must read:**
+- N/A — this is the final milestone. All handoff files remain valid for reference.
+
+Note: Milestone 6 (Vivado Synthesis) agent spec is written (`vivado/create_project.tcl` TCL to be generated when user runs pynq_vivado agent with Vivado 2022.1+ installed).

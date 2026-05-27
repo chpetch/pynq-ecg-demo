@@ -1,0 +1,3 @@
+fastapi
+uvicorn[standard]
+pynq>=3.0
