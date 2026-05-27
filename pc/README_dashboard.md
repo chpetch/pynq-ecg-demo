@@ -73,6 +73,38 @@ Navigate to `http://localhost:8501` in your browser.
 - The `⚠ Signal Lost` badge appears when the board reports `lead_off = true`.
 - The chart refreshes at approximately 10 fps (100 ms rerun cycle).
 
+## Testing Without Hardware — Mock Server
+
+You can run the full dashboard on your PC without the PYNQ board using the
+bundled mock server, which generates synthetic ECG using the same FIR filter
+and R-peak detector as the RTL.
+
+**Terminal 1 — start the mock server:**
+```bash
+cd pc
+pip install -r requirements.txt
+python mock_server.py
+```
+Output:
+```
+  WebSocket : ws://localhost:5000/ws
+  Status    : http://localhost:5000/status
+  Config    : POST http://localhost:5000/config
+  Dashboard: set Board IP to  localhost
+```
+
+**Terminal 2 — start the dashboard:**
+```bash
+cd pc
+streamlit run dashboard.py
+```
+
+In the dashboard sidebar set **Board IP** to `localhost` and click **Connect**.
+The waveform should start scrolling immediately. The BPM slider and [Apply Config]
+button are fully functional — config changes take effect within the next generated beat.
+
+---
+
 ## WebSocket / REST endpoints (provided by `ps/server.py`)
 
 | Endpoint | Method | Description |
