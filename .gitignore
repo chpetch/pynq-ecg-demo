@@ -7,6 +7,7 @@
 *.hwh
 vivado_project/
 vivado/build/
+NA/
 
 # Python
 __pycache__/
