@@ -67,10 +67,12 @@ set_property DRIVE 8 [get_ports {DAC_SCLK}]
 set_property PACKAGE_PIN V10 [get_ports {adc_scl}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_scl}]
 set_property DRIVE 8 [get_ports {adc_scl}]
+set_property PULLTYPE PULLUP [get_ports {adc_scl}]
 
 # JB[3] — ADC_SDA (I2C data, bidirectional) — physical pin JB4 = W10  [PMOD Pin 2]
 set_property PACKAGE_PIN W10 [get_ports {adc_sda}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_sda}]
+set_property PULLTYPE PULLUP [get_ports {adc_sda}]
 
 # ==============================================================================
 # DRC overrides
