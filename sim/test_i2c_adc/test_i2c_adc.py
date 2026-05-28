@@ -32,7 +32,7 @@ from cocotb.triggers import RisingEdge, ClockCycles
 from cocotb.types import LogicArray
 
 CLK_PERIOD_NS = 10
-HALF_PERIOD = 125
+HALF_PERIOD = 500   # 100 kHz SCL: 500-cycle half-period (was 125 for 400 kHz)
 Z_VAL = LogicArray('Z')
 
 # RTL state constants
@@ -62,7 +62,7 @@ def get_state(dut):
         return -1
 
 
-async def wait_scl_fall(dut, timeout=2000):
+async def wait_scl_fall(dut, timeout=8000):
     prev = scl_val(dut)
     for _ in range(timeout):
         await RisingEdge(dut.clk)
@@ -73,7 +73,7 @@ async def wait_scl_fall(dut, timeout=2000):
     return False
 
 
-async def wait_scl_rise(dut, timeout=2000):
+async def wait_scl_rise(dut, timeout=8000):
     prev = scl_val(dut)
     for _ in range(timeout):
         await RisingEdge(dut.clk)
@@ -84,7 +84,7 @@ async def wait_scl_rise(dut, timeout=2000):
     return False
 
 
-async def wait_for_state(dut, target_state, timeout=5000):
+async def wait_for_state(dut, target_state, timeout=20000):
     """Wait until RTL enters the specified state."""
     for _ in range(timeout):
         await RisingEdge(dut.clk)
@@ -177,27 +177,27 @@ async def i2c_slave_respond(dut, byte1=0x05, byte2=0xA3):
     # Even simpler: just wait for the ACK states directly.
 
     # Wait for WR_ADDR_ACK (state=4) then drive ACK
-    ok = await wait_for_state(dut, 4, timeout=3000)  # WR_ADDR_ACK
+    ok = await wait_for_state(dut, 4, timeout=12000)  # WR_ADDR_ACK
     assert ok, "Slave: never entered WR_ADDR_ACK"
     # Drive SDA=0 during WR_ADDR_ACK's SCL high period
     dut.adc_sda.value = 0
-    ok = await wait_for_state(dut, 5, timeout=1000)  # WR_CFG_BIT = next state
+    ok = await wait_for_state(dut, 5, timeout=4000)  # WR_CFG_BIT = next state
     assert ok, "Slave: never left WR_ADDR_ACK"
     dut.adc_sda.value = Z_VAL
 
     # Wait for WR_CFG_ACK (state=6) then drive ACK
-    ok = await wait_for_state(dut, 6, timeout=3000)  # WR_CFG_ACK
+    ok = await wait_for_state(dut, 6, timeout=12000)  # WR_CFG_ACK
     assert ok, "Slave: never entered WR_CFG_ACK"
     dut.adc_sda.value = 0
-    ok = await wait_for_state(dut, 7, timeout=1000)  # REP_START_H = next state
+    ok = await wait_for_state(dut, 7, timeout=4000)  # REP_START_H = next state
     assert ok, "Slave: never left WR_CFG_ACK"
     dut.adc_sda.value = Z_VAL
 
     # Wait for RD_ADDR_ACK (state=13) then drive ACK
-    ok = await wait_for_state(dut, RD_ADDR_ACK, timeout=3000)
+    ok = await wait_for_state(dut, RD_ADDR_ACK, timeout=12000)
     assert ok, "Slave: never entered RD_ADDR_ACK"
     dut.adc_sda.value = 0
-    ok = await wait_for_state(dut, RD_BYTE1_BIT, timeout=1000)
+    ok = await wait_for_state(dut, RD_BYTE1_BIT, timeout=4000)
     assert ok, "Slave: never left RD_ADDR_ACK"
     dut.adc_sda.value = Z_VAL
 
@@ -215,9 +215,9 @@ async def i2c_slave_respond(dut, byte1=0x05, byte2=0xA3):
     # After 8 bits: SCL fell for bit_cnt=0 phase=1 → RTL enters RD_BYTE1_ACK
 
     # --- Step 5: Skip RD_BYTE1_ACK (master ACK — RTL drives SDA=0) ---
-    ok = await wait_for_state(dut, RD_BYTE1_ACK, timeout=1000)
+    ok = await wait_for_state(dut, RD_BYTE1_ACK, timeout=4000)
     assert ok, "Slave: never entered RD_BYTE1_ACK"
-    ok = await wait_for_state(dut, RD_BYTE2_BIT, timeout=1000)
+    ok = await wait_for_state(dut, RD_BYTE2_BIT, timeout=4000)
     assert ok, "Slave: never entered RD_BYTE2_BIT"
 
     # --- Step 6: Drive byte2 during RD_BYTE2_BIT ---
@@ -249,7 +249,7 @@ async def tc1_read_sequence(dut):
     dut.start.value = 0
 
     adc_data_val = None
-    for _ in range(25000):
+    for _ in range(100000):
         await RisingEdge(dut.clk)
         if int(dut.adc_valid.value) == 1:
             try:
@@ -302,9 +302,9 @@ async def tc2_scl_frequency(dut):
 
     assert rise1 and rise2, "TC2 FAIL: couldn't find two SCL rising edges"
     period = rise2 - rise1
-    dut._log.info(f"TC2: SCL period = {period} clock cycles (expected 250 ± 2)")
-    assert 248 <= period <= 252, f"TC2 FAIL: SCL period = {period}, expected 250 ± 2"
-    dut._log.info("TC2 PASS: SCL frequency correct (400 kHz)")
+    dut._log.info(f"TC2: SCL period = {period} clock cycles (expected 1000 ± 2)")
+    assert 998 <= period <= 1002, f"TC2 FAIL: SCL period = {period}, expected 1000 ± 2"
+    dut._log.info("TC2 PASS: SCL frequency correct (100 kHz)")
 
 
 @cocotb.test()
@@ -320,7 +320,7 @@ async def tc3_valid_pulse_width(dut):
     dut.start.value = 0
 
     valid_cycles = 0
-    for _ in range(25000):
+    for _ in range(100000):
         await RisingEdge(dut.clk)
         if int(dut.adc_valid.value) == 1:
             valid_cycles = 1

@@ -1,7 +1,7 @@
 // Module   : i2c_adc_driver
 // Project  : PYNQ-Z2 ECG Demo
 // Agent    : pynq_ecg_process
-// Purpose  : I2C master for PMOD AD2 (AD7991-0), 400 kHz, reads 12-bit ADC sample
+// Purpose  : I2C master for PMOD AD2 (AD7991-0), 100 kHz, reads 12-bit ADC sample
 //
 // Protocol : WRITE config(0x10) with STOP, then separate START + READ 2 bytes.
 //            Uses STOP+START (not repeated-start) to match pmod_test.py behaviour.
@@ -24,7 +24,10 @@ module i2c_adc_driver (
     output reg         adc_valid
 );
 
-    localparam CLK_DIV  = 8'd124;
+    // 100 MHz / 100 kHz = 1000 counts per SCL period; half = 500 → CLK_DIV = 499
+    // Slower than 400 kHz to match what Pmod_IIC uses on the proven path —
+    // gives the bus more rise-time headroom against board pull-up + cable capacitance.
+    localparam CLK_DIV  = 10'd499;
     localparam I2C_ADDR = 7'h28;
     localparam CFG_BYTE = 8'h10;
 
@@ -53,7 +56,7 @@ module i2c_adc_driver (
     localparam DONE         = 5'd20;
 
     reg [4:0]  state;
-    reg [7:0]  clk_cnt;
+    reg [9:0]  clk_cnt;
     reg [2:0]  bit_cnt;
     reg [7:0]  shift_reg;
     reg [7:0]  byte1;
@@ -77,7 +80,7 @@ module i2c_adc_driver (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state    <= IDLE;
-            clk_cnt  <= 8'd0;
+            clk_cnt  <=  10'd0;
             bit_cnt  <= 3'd7;
             shift_reg<= 8'd0;
             byte1    <= 8'd0;
@@ -96,7 +99,7 @@ module i2c_adc_driver (
                     scl_r   <= 1'b1;
                     sda_out <= 1'b1;
                     sda_oe  <= 1'b1;
-                    clk_cnt <= 8'd0;
+                    clk_cnt <= 10'd0;
                     bit_cnt <= 3'd7;
                     if (start)
                         state <= START_SDA_LO;
@@ -107,7 +110,7 @@ module i2c_adc_driver (
                     sda_out <= 1'b0;
                     sda_oe  <= 1'b1;
                     if (half_tick) begin
-                        clk_cnt <= 8'd0;
+                        clk_cnt <= 10'd0;
                         state   <= START_SCL_LO;
                     end else
                         clk_cnt <= clk_cnt + 1'b1;
@@ -116,7 +119,7 @@ module i2c_adc_driver (
                 START_SCL_LO: begin
                     scl_r <= 1'b0;
                     if (half_tick) begin
-                        clk_cnt  <= 8'd0;
+                        clk_cnt  <=  10'd0;
                         shift_reg<= {I2C_ADDR, 1'b0};
                         bit_cnt  <= 3'd7;
                         state    <= WR_ADDR_BIT;
@@ -131,14 +134,14 @@ module i2c_adc_driver (
                         sda_oe  <= 1'b1;
                         scl_r   <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt  <= 8'd0;
+                            clk_cnt  <=  10'd0;
                             scl_r    <= 1'b0;
                             phase    <= 1'b0;
                             shift_reg<= {shift_reg[6:0], 1'b0};
@@ -157,14 +160,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;          // keep SCL low
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;    // raise SCL at end of low half
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt  <= 8'd0;
+                            clk_cnt  <=  10'd0;
                             scl_r    <= 1'b0;
                             phase    <= 1'b0;
                             shift_reg<= CFG_BYTE;
@@ -182,14 +185,14 @@ module i2c_adc_driver (
                         sda_oe  <= 1'b1;
                         scl_r   <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt  <= 8'd0;
+                            clk_cnt  <=  10'd0;
                             scl_r    <= 1'b0;
                             phase    <= 1'b0;
                             shift_reg<= {shift_reg[6:0], 1'b0};
@@ -208,14 +211,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;          // keep SCL low
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b0;
                             phase   <= 1'b0;
                             state   <= STOP_W;
@@ -231,14 +234,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             phase   <= 1'b0;
                             state   <= STOP_W_SDA;
                         end else
@@ -251,7 +254,7 @@ module i2c_adc_driver (
                     sda_out <= 1'b1;
                     sda_oe  <= 1'b1;
                     if (half_tick) begin
-                        clk_cnt <= 8'd0;
+                        clk_cnt <= 10'd0;
                         state   <= INTER;
                     end else
                         clk_cnt <= clk_cnt + 1'b1;
@@ -263,8 +266,8 @@ module i2c_adc_driver (
                     sda_out <= 1'b1;
                     sda_oe  <= 1'b1;
                     scl_r   <= 1'b1;
-                    if (clk_cnt == 8'd249) begin
-                        clk_cnt <= 8'd0;
+                    if (clk_cnt == 10'd999) begin
+                        clk_cnt <= 10'd0;
                         state   <= START2_SDA;
                     end else
                         clk_cnt <= clk_cnt + 1'b1;
@@ -276,7 +279,7 @@ module i2c_adc_driver (
                     sda_out <= 1'b0;
                     sda_oe  <= 1'b1;
                     if (half_tick) begin
-                        clk_cnt <= 8'd0;
+                        clk_cnt <= 10'd0;
                         state   <= START2_SCL;
                     end else
                         clk_cnt <= clk_cnt + 1'b1;
@@ -286,7 +289,7 @@ module i2c_adc_driver (
                 START2_SCL: begin
                     scl_r <= 1'b0;
                     if (half_tick) begin
-                        clk_cnt  <= 8'd0;
+                        clk_cnt  <=  10'd0;
                         shift_reg<= {I2C_ADDR, 1'b1};  // READ bit
                         bit_cnt  <= 3'd7;
                         state    <= RD_ADDR_BIT;
@@ -301,14 +304,14 @@ module i2c_adc_driver (
                         sda_oe  <= 1'b1;
                         scl_r   <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt  <= 8'd0;
+                            clk_cnt  <=  10'd0;
                             scl_r    <= 1'b0;
                             phase    <= 1'b0;
                             shift_reg<= {shift_reg[6:0], 1'b0};
@@ -326,14 +329,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b0;
                             phase   <= 1'b0;
                             bit_cnt <= 3'd7;
@@ -349,14 +352,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b0;
                             phase   <= 1'b0;
                             if (bit_cnt == 3'd0) begin
@@ -381,14 +384,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt  <= 8'd0;
+                            clk_cnt  <=  10'd0;
                             scl_r    <= 1'b0;
                             sda_oe   <= 1'b0;
                             phase    <= 1'b0;
@@ -405,14 +408,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b0;
                             phase   <= 1'b0;
                             if (bit_cnt == 3'd0) begin
@@ -434,14 +437,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b0;
                             phase   <= 1'b0;
                             state   <= STOP_SCL_HI;
@@ -457,14 +460,14 @@ module i2c_adc_driver (
                     if (!phase) begin
                         scl_r <= 1'b0;
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             scl_r   <= 1'b1;
                             phase   <= 1'b1;
                         end else
                             clk_cnt <= clk_cnt + 1'b1;
                     end else begin
                         if (half_tick) begin
-                            clk_cnt <= 8'd0;
+                            clk_cnt <= 10'd0;
                             phase   <= 1'b0;
                             state   <= STOP_SDA_HI;
                         end else
@@ -476,7 +479,7 @@ module i2c_adc_driver (
                 STOP_SDA_HI: begin
                     sda_out <= 1'b1;
                     if (half_tick) begin
-                        clk_cnt   <= 8'd0;
+                        clk_cnt   <=  10'd0;
                         adc_valid <= 1'b1;
                         state     <= DONE;
                     end else
