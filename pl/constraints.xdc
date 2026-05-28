@@ -63,14 +63,17 @@ set_property DRIVE 8 [get_ports {DAC_SCLK}]
 # JB Header — ADC I2C (ecg_process_top)
 # ==============================================================================
 
-# JB[2] — ADC_SCL (I2C clock, output) — physical pin JB3 = V10  [PMOD Pin 1]
-set_property PACKAGE_PIN V10 [get_ports {adc_scl}]
+# JB[3] — ADC_SCL (I2C clock, output) — physical pin JB4 = W10
+# SWAPPED from V10 to W10 — testing the PMOD AD2 silkscreen-mislabel theory
+# reported in https://discuss.pynq.io/t/pmod-communication-through-i2c/2130/4
+set_property PACKAGE_PIN W10 [get_ports {adc_scl}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_scl}]
 set_property DRIVE 8 [get_ports {adc_scl}]
 set_property PULLTYPE PULLUP [get_ports {adc_scl}]
 
-# JB[3] — ADC_SDA (I2C data, bidirectional) — physical pin JB4 = W10  [PMOD Pin 2]
-set_property PACKAGE_PIN W10 [get_ports {adc_sda}]
+# JB[2] — ADC_SDA (I2C data, bidirectional) — physical pin JB3 = V10
+# SWAPPED from W10 to V10 (see note on adc_scl above)
+set_property PACKAGE_PIN V10 [get_ports {adc_sda}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_sda}]
 set_property PULLTYPE PULLUP [get_ports {adc_sda}]
 
