@@ -72,6 +72,18 @@ set_property IOSTANDARD  LVCMOS33 [get_ports {pmodb_gpio_tri_io[6]}]
 set_property PACKAGE_PIN T14 [get_ports {pmodb_gpio_tri_io[7]}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {pmodb_gpio_tri_io[7]}]
 
+# ------------------------------------------------------------------------------
+# I2C pull-ups (REQUIRED — copied verbatim from the working base overlay
+# base.xdc). The AXI IIC drives SCL/SDA open-drain; without pull-ups the lines
+# can't go high and Pmod_IIC.send() times out. Pins 2(SCL)/3(SDA) plus 6/7 are
+# pulled up because the PMOD AD2 internally bridges pins 2<->6 and 3<->7, so
+# both ends of each bridged pair must be pulled up (matches base exactly).
+# ------------------------------------------------------------------------------
+set_property PULLUP true [get_ports {pmodb_gpio_tri_io[2]}]
+set_property PULLUP true [get_ports {pmodb_gpio_tri_io[3]}]
+set_property PULLUP true [get_ports {pmodb_gpio_tri_io[6]}]
+set_property PULLUP true [get_ports {pmodb_gpio_tri_io[7]}]
+
 # ==============================================================================
 # DRC overrides
 # ==============================================================================
