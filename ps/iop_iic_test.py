@@ -34,8 +34,14 @@ def main():
     print("  [OK] iop_pmodb recognised as:", type(ol.iop_pmodb).__name__)
     # MicroblazeHierarchy exposes the mb_info dict that Pmod_IIC needs (passing
     # the hierarchy object itself raises 'not subscriptable').
-    mb_info = ol.iop_pmodb.mb_info
+    mb_info = dict(ol.iop_pmodb.mb_info)
     print("      mb_info:", mb_info)
+    # The Pmod mailbox protocol is POLLING-based; the IOP interrupt is optional.
+    # Our overlay's interrupt-controller wiring differs from the base overlay, so
+    # PYNQ can't resolve intr_pin_name into its interrupt tree. Drop it to skip
+    # the interrupt hookup and run via polling. (A future rebuild can wire the
+    # AXI INTC like base if async interrupts are ever needed.)
+    mb_info.pop("intr_pin_name", None)
 
     print("Init Pmod_IIC on PMODB pins 2(SCL/V10), 3(SDA/W10), addr 0x%02X" % I2C_ADDR)
     iic = Pmod_IIC(mb_info, 2, 3, I2C_ADDR)

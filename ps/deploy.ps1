@@ -1,12 +1,12 @@
 param(
     [string]$BoardIP   = "192.168.2.99",
     [string]$BoardUser = "xilinx",
-    [string]$Dest      = "/home/xilinx/pynq-ecg-demo"
+    [string]$Dest      = "/home/xilinx/jupyter_notebooks/pynq-ecg-demo"
 )
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== Deploying to $BoardUser@$BoardIP:$Dest ===" -ForegroundColor Cyan
+Write-Host "=== Deploying to ${BoardUser}@${BoardIP}:${Dest} ===" -ForegroundColor Cyan
 
 # Create destination directories on board
 Write-Host "Creating directories on board..."
