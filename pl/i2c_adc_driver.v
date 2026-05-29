@@ -55,19 +55,22 @@ module i2c_adc_driver (
     localparam STOP_SDA_HI  = 5'd19;
     localparam DONE         = 5'd20;
 
-    reg [4:0]  state;
-    reg [9:0]  clk_cnt;
-    reg [2:0]  bit_cnt;
-    reg [7:0]  shift_reg;
-    reg [7:0]  byte1;
-    reg        scl_r;
-    reg        sda_out;
-    reg        sda_oe;
-    reg        phase;
+    // (* mark_debug *) attributes below expose these nets to the ILA inserted by
+    // vivado/create_i2c_test.tcl. They are synthesis pragmas only — no behavioral
+    // or interface change. Remove if/when the I2C bring-up debug is finished.
+    (* mark_debug = "true" *) reg [4:0]  state;
+                              reg [9:0]  clk_cnt;
+    (* mark_debug = "true" *) reg [2:0]  bit_cnt;
+    (* mark_debug = "true" *) reg [7:0]  shift_reg;
+    (* mark_debug = "true" *) reg [7:0]  byte1;
+    (* mark_debug = "true" *) reg        scl_r;
+    (* mark_debug = "true" *) reg        sda_out;
+    (* mark_debug = "true" *) reg        sda_oe;
+                              reg        phase;
 
     assign adc_scl = scl_r;
 
-    wire sda_in;
+    (* mark_debug = "true" *) wire sda_in;
     IOBUF sda_iobuf (
         .IO (adc_sda),
         .O  (sda_in),

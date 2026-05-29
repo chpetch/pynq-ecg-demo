@@ -7,6 +7,8 @@
 *.hwh
 vivado_project/
 vivado/build/
+vivado/build_i2c_test/
+*.ltx
 NA/
 
 # Python
