@@ -1,24 +1,15 @@
 // Module   : ecg_process_top
 // Project  : PYNQ-Z2 ECG Demo
 // Agent    : pynq_ecg_process
-// Purpose  : Top-level wrapper instantiating I2C ADC driver, FIR filter,
-//            R-peak detector, and AXI4-Lite control registers
+// Purpose  : Top-level wrapper instantiating FIR filter, R-peak detector, and
+//            AXI4-Lite control registers. ADC sampling moved to PS — PS reads
+//            from a Xilinx AXI IIC IP (in the block design) and writes the
+//            12-bit sample into ECG_RAW (0x28) which feeds the FIR.
 
 module ecg_process_top (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        sample_trigger,   // from ecg_signal_gen_top sample_valid_out
-
-    // ADC I2C pins (PMOD AD2, JB header)
-    inout  wire        adc_sda,
-    output wire        adc_scl,
-
-    // Bottom-row JB pads shorted to adc_scl/adc_sda via PMOD AD2 internal
-    // connector wiring (pins 1↔5 and 2↔6). Declared as inputs to hold them
-    // with PULLUP constraints and prevent floating-pad noise injection.
-    // Not connected to any internal logic.
-    input  wire        adc_scl_alt,
-    input  wire        adc_sda_alt,
 
     // AXI4-Lite slave interface
     input  wire        s_axi_aclk,
@@ -72,6 +63,8 @@ module ecg_process_top (
     // ---------------------------------------------------------------------------
     // Internal signals
     // ---------------------------------------------------------------------------
+    // adc_data / adc_valid now come from the AXI register file (PS-written
+    // via the Xilinx AXI IIC IP) rather than the deleted i2c_adc_driver.
     wire [11:0] adc_data;
     wire        adc_valid;
 
@@ -82,19 +75,6 @@ module ecg_process_top (
     wire [7:0]  bpm_measured;
 
     wire [11:0] detect_thresh;
-
-    // ---------------------------------------------------------------------------
-    // i2c_adc_driver: triggered by sample_trigger, reads 12-bit ADC via I2C
-    // ---------------------------------------------------------------------------
-    i2c_adc_driver u_i2c_adc (
-        .clk       (clk),
-        .rst_n     (rst_n),
-        .start     (sample_trigger),
-        .adc_sda   (adc_sda),
-        .adc_scl   (adc_scl),
-        .adc_data  (adc_data),
-        .adc_valid (adc_valid)
-    );
 
     // ---------------------------------------------------------------------------
     // fir_filter: 31-tap bandpass, Q1.15 coefficients from algorithm_spec.md
@@ -166,10 +146,14 @@ module ecg_process_top (
         .detect_thresh (detect_thresh),
 
         // Inputs from processing pipeline
-        .ecg_raw_in    (adc_data),
         .ecg_filt_in   (fir_data_out),
         .bpm_in        (bpm_measured),
         .rpeak_in      (rpeak_detected),
+
+        // ECG_RAW is now PS-written via AXI; expose its value + write-pulse
+        // back out so the FIR sees fresh samples whenever PS writes 0x28.
+        .adc_data_out  (adc_data),
+        .adc_valid_out (adc_valid),
 
         // DAC waveform sample from DDS
         .dac_sample_in (dac_sample_in)

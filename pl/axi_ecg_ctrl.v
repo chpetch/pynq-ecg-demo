@@ -15,7 +15,9 @@
 //  0x1C  BPM_CH_F        R/W  [7:0]   Ch F default 100 BPM             (0x64)
 //  0x20  BPM_CH_G        R/W  [7:0]   Ch G default 120 BPM             (0x78)
 //  0x24  BPM_CH_H        R/W  [7:0]   Ch H default 150 BPM             (0x96)
-//  0x28  ECG_RAW         R    [11:0]  Latest raw ADC sample            (0x000)
+//  0x28  ECG_RAW         R/W  [11:0]  Latest raw ADC sample            (0x000)
+//                                     (written by PS — sourced from AXI IIC IP
+//                                     reading the PMOD AD2 AD7991)
 //  0x2C  ECG_FILTERED    R    [11:0]  Latest filtered sample           (0x000)
 //  0x30  BPM_OUT         R    [7:0]   Live BPM from R-peak detector    (0x00)
 //  0x34  RPEAK_COUNT     R    [15:0]  Rolling R-peak event counter     (0x0000)
@@ -76,10 +78,15 @@ module axi_ecg_ctrl #(
     output wire [11:0] detect_thresh,
 
     // Input wires from PL modules (ecg_process pipeline)
-    input  wire [11:0] ecg_raw_in,
     input  wire [11:0] ecg_filt_in,
     input  wire [7:0]  bpm_in,
     input  wire        rpeak_in,
+
+    // ECG_RAW is now PS-written (via the AXI IIC IP sampler). Expose its
+    // value and a 1-cycle write-pulse so the FIR filter downstream sees a
+    // new sample whenever PS writes register 0x28.
+    output wire [11:0] adc_data_out,
+    output reg         adc_valid_out,
 
     // Input wire from DDS — latest Ch A DAC sample
     input  wire [11:0] dac_sample_in
@@ -127,6 +134,10 @@ module axi_ecg_ctrl #(
     assign amp_fluct   = reg_amp_fluct;
     assign detect_thresh = reg_detect_thresh;
 
+    // Expose ECG_RAW to the FIR filter. adc_valid_out is a 1-cycle pulse
+    // that fires the cycle after PS writes register 0x28.
+    assign adc_data_out = reg_ecg_raw;
+
     // ---------------------------------------------------------------------------
     // AXI write address / data capture
     // ---------------------------------------------------------------------------
@@ -162,6 +173,8 @@ module axi_ecg_ctrl #(
             reg_rpeak_count<= 16'd0;
             reg_status     <= 2'b00;
 
+            adc_valid_out  <= 1'b0;
+
             // AXI handshake state
             s_axi_awready  <= 1'b0;
             s_axi_wready   <= 1'b0;
@@ -176,6 +189,9 @@ module axi_ecg_ctrl #(
             sig_window_cnt <= 10'd0;
             signal_present <= 1'b0;
         end else begin
+            // Default de-assert adc_valid_out — pulses 1 cycle on 0x28 write.
+            adc_valid_out <= 1'b0;
+
             // ------------------------------------------------------------------
             // Latch incoming write address
             // ------------------------------------------------------------------
@@ -218,7 +234,13 @@ module axi_ecg_ctrl #(
                     7'h1C: if (wr_strb_lat[0]) reg_bpm_ch_f       <= wr_data_lat[7:0];
                     7'h20: if (wr_strb_lat[0]) reg_bpm_ch_g       <= wr_data_lat[7:0];
                     7'h24: if (wr_strb_lat[0]) reg_bpm_ch_h       <= wr_data_lat[7:0];
-                    // 0x28 ECG_RAW       — read-only, write ignored
+                    7'h28: begin
+                        // ECG_RAW — PS writes a new 12-bit ADC sample here.
+                        // Pulse adc_valid_out so the FIR captures the value.
+                        if (wr_strb_lat[0]) reg_ecg_raw[7:0]  <= wr_data_lat[7:0];
+                        if (wr_strb_lat[1]) reg_ecg_raw[11:8] <= wr_data_lat[11:8];
+                        adc_valid_out <= 1'b1;
+                    end
                     // 0x2C ECG_FILTERED  — read-only, write ignored
                     // 0x30 BPM_OUT       — read-only, write ignored
                     // 0x34 RPEAK_COUNT   — read-only, write ignored
@@ -241,9 +263,10 @@ module axi_ecg_ctrl #(
                 s_axi_bvalid <= 1'b0;
 
             // ------------------------------------------------------------------
-            // Update read-only shadow registers from PL inputs
+            // Update read-only shadow registers from PL inputs.
+            // reg_ecg_raw is intentionally NOT updated here — PS writes it
+            // directly via the 0x28 write decode above.
             // ------------------------------------------------------------------
-            reg_ecg_raw  <= ecg_raw_in;
             reg_ecg_filt <= ecg_filt_in;
             ecg_dac_reg  <= dac_sample_in;
             reg_bpm_out  <= bpm_in;
@@ -257,7 +280,7 @@ module axi_ecg_ctrl #(
                 sig_window_cnt <= 10'd0;
                 signal_present <= 1'b0;
             end
-            if (ecg_raw_in > 12'h010)
+            if (reg_ecg_raw > 12'h010)
                 signal_present <= 1'b1;
 
             reg_status <= {1'b0, signal_present};  // [1]=lead_off (unused), [0]=signal_present

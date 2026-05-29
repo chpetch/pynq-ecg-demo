@@ -9,6 +9,7 @@ Milestone 5 — pynq_ps_server agent
 import asyncio
 import os
 import signal
+import threading
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -27,6 +28,10 @@ AXI_BASE = 0x43C00000
 SAMPLE_RATE_HZ = 360
 DEFAULT_DETECT_THRESHOLD = 2983  # 0xBA7 per algorithm_spec.md
 SENTINEL_VALUES = (0xDEADBEEF, 0xFFFFFFFF)
+
+# AD7991-0 (PMOD AD2) constants — read via Xilinx AXI IIC IP at 0x41600000
+AD7991_I2C_ADDR  = 0x28
+AD7991_CFG_CH0   = 0x10   # enable CH0 only, Vcc reference, no filters
 
 
 # ---------------------------------------------------------------------------
@@ -59,9 +64,68 @@ class ECGRegisters:
 
 overlay = None       # pynq.Overlay instance
 axi = None           # AXI MMIO handle (overlay.axi_ecg_ctrl)
+sampler = None       # AD7991Sampler instance (PS-side ADC reader)
 start_time_ms: float = 0.0
 prev_rpeak_count: int = 0
 connected_clients: list[WebSocket] = []
+
+
+# ---------------------------------------------------------------------------
+# AD7991 sampler (PS-side, drives Xilinx AXI IIC IP)
+# ---------------------------------------------------------------------------
+
+class AD7991Sampler:
+    """Background thread that reads the AD7991-0 over the Xilinx AXI IIC IP
+    and writes each 12-bit sample to ECG_RAW (0x28) on the custom block.
+
+    Replaces the deleted custom RTL i2c_adc_driver.v — vendor IP handles
+    all the I2C protocol details (start/stop/ACK/clock-stretch). PS owns
+    the sample rate; ~360 Hz is well within the AD7991's conversion budget
+    and the AXI IIC's 100 kHz bus rate (each 2-byte read takes ~270 us
+    plus a config write ~180 us = ~450 us per sample, 16% utilisation).
+    """
+
+    def __init__(self, axi_iic, axi_ctrl):
+        self._iic       = axi_iic
+        self._axi_ctrl  = axi_ctrl
+        self._stop_evt  = threading.Event()
+        self._thread    = None
+        self._error_logged = False
+
+    def start(self) -> None:
+        self._stop_evt.clear()
+        self._thread = threading.Thread(
+            target=self._loop, name="AD7991Sampler", daemon=True)
+        self._thread.start()
+        print(f"AD7991Sampler started at {SAMPLE_RATE_HZ} Hz "
+              f"(slave 0x{AD7991_I2C_ADDR:02X}, cfg 0x{AD7991_CFG_CH0:02X})")
+
+    def stop(self) -> None:
+        self._stop_evt.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+        print("AD7991Sampler stopped.")
+
+    def _loop(self) -> None:
+        period_s  = 1.0 / SAMPLE_RATE_HZ
+        next_tick = time.monotonic()
+        while not self._stop_evt.is_set():
+            try:
+                self._iic.send(AD7991_I2C_ADDR, [AD7991_CFG_CH0], 1)
+                data = self._iic.receive(AD7991_I2C_ADDR, 2)
+                raw  = ((data[0] & 0x0F) << 8) | (data[1] & 0xFF)
+                self._axi_ctrl.write(ECGRegisters.ECG_RAW, raw)
+            except Exception as exc:
+                if not self._error_logged:
+                    print(f"AD7991 sample error (suppressing further): {exc}")
+                    self._error_logged = True
+
+            next_tick += period_s
+            delta = next_tick - time.monotonic()
+            if delta > 0:
+                time.sleep(delta)
+            else:
+                next_tick = time.monotonic()  # we slipped; resync
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +151,7 @@ def axi_write(offset: int, value: int) -> None:
 
 def load_overlay() -> None:
     """Load the PL bitstream; exit with error if not present."""
-    global overlay, axi
+    global overlay, axi, sampler
 
     if not os.path.exists(BITSTREAM_PATH):
         print(f"ERROR: {BITSTREAM_PATH} not found. Copy bitstream from Vivado export first.")
@@ -101,6 +165,19 @@ def load_overlay() -> None:
     # Write the algorithm-specified default threshold at startup
     axi_write(ECGRegisters.DETECT_THRESHOLD, DEFAULT_DETECT_THRESHOLD)
     print(f"Overlay loaded. DETECT_THRESHOLD set to {DEFAULT_DETECT_THRESHOLD} (0x{DEFAULT_DETECT_THRESHOLD:03X}).")
+
+    # Start PS-side ADC sampler using the Xilinx AXI IIC IP.
+    # The IP is auto-discovered by PYNQ as overlay.axi_iic_0 (named by the
+    # block-design instance in create_project.tcl).
+    try:
+        axi_iic = overlay.axi_iic_0
+    except AttributeError:
+        print("WARNING: axi_iic_0 not found in overlay — ECG_RAW will not be sampled.")
+        print("         Did you rebuild the bitstream after the I2C IP migration?")
+        return
+
+    sampler = AD7991Sampler(axi_iic, axi)
+    sampler.start()
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +203,7 @@ async def lifespan(app: FastAPI):
 
 
 async def _shutdown() -> None:
-    """Close all WebSocket connections and release the overlay."""
+    """Close all WebSocket connections, stop ADC sampler, release the overlay."""
     print("Shutting down — closing WebSocket connections...")
     for ws in list(connected_clients):
         try:
@@ -134,6 +211,12 @@ async def _shutdown() -> None:
         except Exception:
             pass
     connected_clients.clear()
+
+    if sampler is not None:
+        try:
+            sampler.stop()
+        except Exception:
+            pass
 
     if overlay is not None:
         try:

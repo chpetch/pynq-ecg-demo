@@ -64,7 +64,7 @@ All registers are 32-bit aligned; unused upper bits read as 0.
 
 | Offset | Name              | R/W | Bits   | Description                              | Default |
 |--------|-------------------|-----|--------|------------------------------------------|---------|
-| 0x28   | ECG_RAW           | R   | [11:0] | Latest raw ADC sample from AD7991-0      | 0x000   |
+| 0x28   | ECG_RAW           | R/W | [11:0] | Latest raw ADC sample from AD7991-0      | 0x000   |
 | 0x2C   | ECG_FILTERED      | R   | [11:0] | Latest FIR-filtered ECG sample           | 0x000   |
 | 0x30   | BPM_OUT           | R   | [7:0]  | Live BPM from R-peak detector            | 0x00    |
 | 0x34   | RPEAK_COUNT       | R   | [15:0] | Rolling R-peak event counter (wraps)     | 0x0000  |
@@ -74,7 +74,12 @@ All registers are 32-bit aligned; unused upper bits read as 0.
 
 ### Notes
 
-- `ECG_RAW` and `ECG_FILTERED` update every ADC sample cycle (~360 Hz).
+- `ECG_RAW` is **written by PS** at ~360 Hz. The PS server reads the AD7991-0
+  via the Xilinx AXI IIC IP (base address `0x41600000`) and writes the 12-bit
+  result here. Writing also pulses the internal `adc_valid` signal that
+  triggers the FIR filter on a new sample. Prior to v2 this was driven by the
+  custom `i2c_adc_driver.v` in PL — that driver is no longer instantiated.
+- `ECG_FILTERED` updates at the same ~360 Hz rate, one FIR latency behind ECG_RAW.
 - `BPM_OUT` updates after each confirmed R-peak. Reads 0 if no beat detected
   for more than 65535 sample intervals (counter saturates — no-signal state).
 - `RPEAK_COUNT` is a 16-bit rolling counter; wraps silently at 0xFFFF.

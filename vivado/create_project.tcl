@@ -87,14 +87,14 @@ set rst [create_bd_cell \
     -vlnv xilinx.com:ip:proc_sys_reset:5.0 \
     proc_sys_reset_0]
 
-# 3c — AXI Interconnect (1 master GP0, 1 slave = ecg_process_top)
+# 3c — AXI Interconnect (1 master GP0, 2 slaves = ecg_process_top + axi_iic)
 puts "INFO:   Adding AXI Interconnect..."
 set axi_ic [create_bd_cell \
     -type ip \
     -vlnv xilinx.com:ip:axi_interconnect:2.1 \
     axi_interconnect_0]
 set_property CONFIG.NUM_SI {1} $axi_ic
-set_property CONFIG.NUM_MI {1} $axi_ic
+set_property CONFIG.NUM_MI {2} $axi_ic
 
 # 3d — ecg_process_top (RTL module with AXI4-Lite slave)
 puts "INFO:   Adding ecg_process_top RTL module..."
@@ -109,6 +109,19 @@ set ecg_gen [create_bd_cell \
     -type module \
     -reference ecg_signal_gen_top \
     ecg_signal_gen_top_0]
+
+# 3f — Xilinx AXI IIC LogiCORE IP (replaces the custom i2c_adc_driver)
+# Drives the PMOD AD2 (AD7991-0) on JB header at 100 kHz. PS reads samples
+# via MMIO and writes results into ECG_RAW (0x28) on the custom block.
+puts "INFO:   Adding AXI IIC IP (PG090)..."
+set axi_iic [create_bd_cell \
+    -type ip \
+    -vlnv xilinx.com:ip:axi_iic:2.1 \
+    axi_iic_0]
+set_property -dict [list \
+    CONFIG.IIC_FREQ_KHZ {100} \
+    CONFIG.C_SCL_INERTIAL_DELAY {0} \
+    CONFIG.C_SDA_INERTIAL_DELAY {0}] $axi_iic
 
 # ------------------------------------------------------------------------------
 # 4 — Clock connections (all from FCLK_CLK0 @ 100 MHz)
@@ -130,6 +143,14 @@ connect_bd_net \
 connect_bd_net \
     [get_bd_pins $ps7/FCLK_CLK0] \
     [get_bd_pins $axi_ic/M00_ACLK]
+connect_bd_net \
+    [get_bd_pins $ps7/FCLK_CLK0] \
+    [get_bd_pins $axi_ic/M01_ACLK]
+
+# AXI IIC IP clock
+connect_bd_net \
+    [get_bd_pins $ps7/FCLK_CLK0] \
+    [get_bd_pins $axi_iic/s_axi_aclk]
 
 # ecg_process_top clocks (both clk and s_axi_aclk)
 connect_bd_net \
@@ -169,6 +190,14 @@ connect_bd_net \
 connect_bd_net \
     [get_bd_pins $rst/peripheral_aresetn] \
     [get_bd_pins $axi_ic/M00_ARESETN]
+connect_bd_net \
+    [get_bd_pins $rst/peripheral_aresetn] \
+    [get_bd_pins $axi_ic/M01_ARESETN]
+
+# AXI IIC IP reset
+connect_bd_net \
+    [get_bd_pins $rst/peripheral_aresetn] \
+    [get_bd_pins $axi_iic/s_axi_aresetn]
 
 # peripheral_aresetn → ecg_process_top s_axi_aresetn + rst_n
 connect_bd_net \
@@ -192,9 +221,15 @@ connect_bd_intf_net \
     [get_bd_intf_pins $ps7/M_AXI_GP0] \
     [get_bd_intf_pins $axi_ic/S00_AXI]
 
+# M00 → custom ecg_process_top (registers at 0x43C00000)
 connect_bd_intf_net \
     [get_bd_intf_pins $axi_ic/M00_AXI] \
     [get_bd_intf_pins $ecg_proc/S_AXI]
+
+# M01 → AXI IIC IP (registers at 0x41600000)
+connect_bd_intf_net \
+    [get_bd_intf_pins $axi_ic/M01_AXI] \
+    [get_bd_intf_pins $axi_iic/S_AXI]
 
 # ------------------------------------------------------------------------------
 # 7 — Internal signal connections (ecg_process_top <-> ecg_signal_gen_top)
@@ -239,22 +274,24 @@ set_property name DAC_CS_N [get_bd_ports dac_cs_n_0]
 set_property name DAC_SCLK [get_bd_ports dac_sclk_0]
 set_property name DAC_DIN  [get_bd_ports dac_din_0]
 
-# ADC I2C — JB header (ecg_process_top)
-make_bd_pins_external [get_bd_pins $ecg_proc/adc_scl]
-# adc_sda is inout — use make_bd_pins_external for inout ports too
-make_bd_pins_external [get_bd_pins $ecg_proc/adc_sda]
+# ADC I2C — JB header. The AXI IIC IP owns the SCL/SDA pads. Make its IIC
+# interface external; Vivado auto-inserts IOBUF primitives and exposes
+# inout top-level ports. For AXI IIC v2.1, the resulting BD interface port
+# is named "IIC_0" with scalar sub-ports `scl_io` and `sda_io`.
+make_bd_intf_pins_external -name IIC_ADC [get_bd_intf_pins $axi_iic/IIC]
 
-# Rename to match XDC net names exactly (already lowercase in XDC)
-set_property name adc_scl [get_bd_ports adc_scl_0]
-set_property name adc_sda [get_bd_ports adc_sda_0]
+# Rename the scalar inout pins inside the interface to match XDC net names.
+# After make_external with -name IIC_ADC, Vivado creates IIC_ADC_scl_io and
+# IIC_ADC_sda_io as inout ports on the top-level wrapper.
+set_property name adc_scl [get_bd_ports IIC_ADC_scl_io]
+set_property name adc_sda [get_bd_ports IIC_ADC_sda_io]
 
-# Bottom-row JB pads — shorted to adc_scl/adc_sda inside the PMOD AD2
-# connector. Constrained with PULLUP in the XDC to keep them from floating
-# and injecting noise back onto the I2C bus. Not connected to any logic.
-make_bd_pins_external [get_bd_pins $ecg_proc/adc_scl_alt]
-make_bd_pins_external [get_bd_pins $ecg_proc/adc_sda_alt]
-set_property name adc_scl_alt [get_bd_ports adc_scl_alt_0]
-set_property name adc_sda_alt [get_bd_ports adc_sda_alt_0]
+# Bottom-row JB pads — T15/T14 are shorted to SCL/SDA via PMOD AD2 internal
+# wiring (pins 1↔5 and 2↔6). Constrained with PULLUP so the floating pads
+# can't inject noise back onto the I2C bus. Created as plain inputs at the
+# wrapper level; not connected to any internal logic.
+create_bd_port -dir I adc_scl_alt
+create_bd_port -dir I adc_sda_alt
 
 # ------------------------------------------------------------------------------
 # 9 — Address assignment
@@ -265,6 +302,13 @@ assign_bd_address \
     -target_address_space /processing_system7_0/Data \
     [get_bd_addr_segs $ecg_proc/S_AXI/reg0] \
     -offset 0x43C00000 \
+    -range 64K
+
+# AXI IIC IP at standard PYNQ slot 0x41600000
+assign_bd_address \
+    -target_address_space /processing_system7_0/Data \
+    [get_bd_addr_segs $axi_iic/S_AXI/Reg] \
+    -offset 0x41600000 \
     -range 64K
 
 # ------------------------------------------------------------------------------

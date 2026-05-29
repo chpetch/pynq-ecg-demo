@@ -8,7 +8,7 @@ Register map (offsets):
   0x00 BPM_CH_A  R/W  default 0x3C
   0x04 RR_FLUCT  R/W  default 0x00
   0x08 AMP_FLUCT R/W  default 0x00
-  0x28 ECG_RAW   R    read-only
+  0x28 ECG_RAW   R/W  PS-written, pulses adc_valid_out for FIR downstream
   0x2C ECG_FILTERED R  read-only
   0x30 BPM_OUT   R    read-only
   0x34 RPEAK_COUNT R  read-only
@@ -37,7 +37,6 @@ async def reset_dut(dut):
     dut.s_axi_arprot.value = 0
     dut.s_axi_arvalid.value = 0
     dut.s_axi_rready.value = 1
-    dut.ecg_raw_in.value = 0
     dut.ecg_filt_in.value = 0
     dut.bpm_in.value = 0
     dut.rpeak_in.value = 0
@@ -162,20 +161,41 @@ async def tc3_write_amp_fluct(dut):
 
 
 @cocotb.test()
-async def tc4_read_ecg_raw(dut):
-    """TC4: Drive ecg_raw_in=0xABC, AXI read offset 0x28. Assert == 0x00000ABC."""
+async def tc4_write_ecg_raw(dut):
+    """TC4: AXI write 0xABC to ECG_RAW (0x28). Assert adc_data_out == 0xABC,
+    adc_valid_out pulses for exactly 1 cycle, and read-back returns 0xABC."""
     cocotb.start_soon(Clock(dut.s_axi_aclk, CLK_PERIOD_NS, units="ns").start())
     await reset_dut(dut)
 
-    dut.ecg_raw_in.value = 0xABC
-    await ClockCycles(dut.s_axi_aclk, 5)  # Let shadow register update
+    # Spawn a watcher that counts adc_valid_out high cycles
+    valid_high_cycles = 0
+    async def watch_valid():
+        nonlocal valid_high_cycles
+        for _ in range(40):
+            await RisingEdge(dut.s_axi_aclk)
+            if int(dut.adc_valid_out.value) == 1:
+                valid_high_cycles += 1
+    watcher = cocotb.start_soon(watch_valid())
+
+    await axi_write(dut, 0x28, 0xABC)
+    await ClockCycles(dut.s_axi_aclk, 5)
+
+    adc_data = int(dut.adc_data_out.value)
+    dut._log.info(f"TC4: adc_data_out = 0x{adc_data:03X} (expected 0xABC)")
+    assert adc_data == 0xABC, \
+        f"TC4 FAIL: adc_data_out=0x{adc_data:03X}, expected 0xABC"
 
     rdata = await axi_read(dut, 0x28)
-    dut._log.info(f"TC4: read ECG_RAW = 0x{rdata:08X} (expected 0x00000ABC)")
+    dut._log.info(f"TC4: read back ECG_RAW = 0x{rdata:08X} (expected 0x00000ABC)")
     assert rdata == 0x00000ABC, \
-        f"TC4 FAIL: ECG_RAW read 0x{rdata:08X}, expected 0x00000ABC"
+        f"TC4 FAIL: read-back 0x{rdata:08X}, expected 0x00000ABC"
 
-    dut._log.info("TC4 PASS: ECG_RAW read correct")
+    await watcher
+    dut._log.info(f"TC4: adc_valid_out pulsed for {valid_high_cycles} cycle(s)")
+    assert valid_high_cycles == 1, \
+        f"TC4 FAIL: adc_valid_out high for {valid_high_cycles} cycles, expected 1"
+
+    dut._log.info("TC4 PASS: ECG_RAW writable, adc_data_out updates, valid pulses 1 cycle")
 
 
 @cocotb.test()
@@ -220,25 +240,25 @@ async def tc6_rpeak_count_increments(dut):
 
 @cocotb.test()
 async def tc7_write_readonly_ignored(dut):
-    """TC7: AXI write 0xDEAD to ECG_RAW (0x28, read-only). Assert ecg_raw register unchanged."""
+    """TC7: AXI write 0xDEAD to ECG_FILTERED (0x2C, read-only). Assert
+    register continues to track ecg_filt_in. ECG_RAW used to be tested here
+    but is now R/W (PS-written via AXI IIC IP); see TC4."""
     cocotb.start_soon(Clock(dut.s_axi_aclk, CLK_PERIOD_NS, units="ns").start())
     await reset_dut(dut)
 
-    # Drive ecg_raw_in to a known value
-    dut.ecg_raw_in.value = 0x123
+    dut.ecg_filt_in.value = 0x123
     await ClockCycles(dut.s_axi_aclk, 5)
 
-    # Try to write to read-only register at 0x28
-    await axi_write(dut, 0x28, 0xDEAD)
+    # Try to write to read-only register at 0x2C
+    await axi_write(dut, 0x2C, 0xDEAD)
     await ClockCycles(dut.s_axi_aclk, 5)
 
-    # The hardware value should still reflect ecg_raw_in, not 0xDEAD
-    rdata = await axi_read(dut, 0x28)
-    dut._log.info(f"TC7: ECG_RAW after write attempt = 0x{rdata:08X} (expected 0x00000123)")
+    rdata = await axi_read(dut, 0x2C)
+    dut._log.info(f"TC7: ECG_FILTERED after write attempt = 0x{rdata:08X} (expected 0x00000123)")
     assert rdata == 0x00000123, \
-        f"TC7 FAIL: ECG_RAW=0x{rdata:08X} after write, expected 0x00000123 (write should be ignored)"
+        f"TC7 FAIL: ECG_FILTERED=0x{rdata:08X} after write, expected 0x00000123 (write should be ignored)"
 
-    dut._log.info("TC7 PASS: write to read-only register ECG_RAW correctly ignored")
+    dut._log.info("TC7 PASS: write to read-only register ECG_FILTERED correctly ignored")
 
 
 @cocotb.test()
@@ -259,7 +279,6 @@ async def tc8_default_values_on_reset(dut):
     dut.s_axi_wstrb.value = 0
     dut.s_axi_araddr.value = 0
     dut.s_axi_arprot.value = 0
-    dut.ecg_raw_in.value = 0
     dut.ecg_filt_in.value = 0
     dut.bpm_in.value = 0
     dut.rpeak_in.value = 0
