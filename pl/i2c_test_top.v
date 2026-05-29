@@ -38,7 +38,7 @@ module i2c_test_top (
     inout         FIXED_IO_ps_srstb,
 
     // --- PMOD AD2 I2C (JB header) ---
-    output        adc_scl,    // JB[2] = V10
+    inout         adc_scl,    // JB[2] = V10 (open-drain)
     inout         adc_sda,    // JB[3] = W10
 
     // --- optional eyeball: led[1]=adc_valid pulse, led[0]=any data bit set ---

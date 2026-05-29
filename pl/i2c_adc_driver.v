@@ -19,7 +19,7 @@ module i2c_adc_driver (
     input  wire        rst_n,
     input  wire        start,
     inout  wire        adc_sda,
-    output wire        adc_scl,
+    inout  wire        adc_scl,   // open-drain: driven low, released (pull-up) for high
     output reg  [11:0] adc_data,
     output reg         adc_valid
 );
@@ -68,14 +68,26 @@ module i2c_adc_driver (
     (* mark_debug = "true" *) reg        sda_oe;
                               reg        phase;
 
-    assign adc_scl = scl_r;
+    // ---- Open-drain bus drivers (match the working MicroBlaze IIC path) ----
+    // SCL: release (pull-up → high) when scl_r=1, actively drive 0 when scl_r=0.
+    // scl_in reads the real pad level so the ILA can confirm SCL toggles cleanly.
+    (* mark_debug = "true" *) wire scl_in;
+    IOBUF scl_iobuf (
+        .IO (adc_scl),
+        .O  (scl_in),
+        .I  (1'b0),
+        .T  (scl_r)          // T=1 release on high, T=0 drive low
+    );
 
+    // SDA: drive 0 only when actively transmitting a 0; release otherwise (when
+    // sending a 1, or reading) so the slave can pull it low for ACK / data.
     (* mark_debug = "true" *) wire sda_in;
+    wire sda_drive_low = sda_oe & ~sda_out;
     IOBUF sda_iobuf (
         .IO (adc_sda),
         .O  (sda_in),
-        .I  (sda_out),
-        .T  (~sda_oe)
+        .I  (1'b0),
+        .T  (~sda_drive_low) // T=0 drive low only when sda_drive_low, else release
     );
 
     wire half_tick = (clk_cnt == CLK_DIV);
