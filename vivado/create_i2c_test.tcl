@@ -104,11 +104,13 @@ validate_bd_design
 save_bd_design
 
 # ------------------------------------------------------------------------------
-# 5 — Generate BD wrapper (NOT top — our RTL i2c_test_top is the top)
+# 5 — Generate BD wrapper. -top is required in 2022.1 just to pick the wrapper
+#     TYPE; we override the project top to i2c_test_top a few lines down so our
+#     RTL — not this wrapper — is the actual top.
 # ------------------------------------------------------------------------------
 puts "INFO: === Step 5: Generating BD wrapper ==="
 
-make_wrapper -files [get_files i2c_test_bd.bd]
+make_wrapper -files [get_files i2c_test_bd.bd] -top
 set wrapper ""
 foreach d {gen srcs} {
     set try [file join $project_dir \
