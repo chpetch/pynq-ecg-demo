@@ -65,6 +65,9 @@ set_property -dict [list \
     CONFIG.C_PROBE_IN1_WIDTH {1}  \
     CONFIG.C_PROBE_OUT0_WIDTH {1} \
 ] [get_ips vio_0]
+# Global (inline) synthesis — avoids a separate OOC run leaving a black-box stub
+# that top-level synth_design can't resolve.
+set_property generate_synth_checkpoint false [get_files vio_0.xci]
 generate_target {synthesis instantiation_template} [get_files vio_0.xci]
 
 # ------------------------------------------------------------------------------
@@ -97,8 +100,14 @@ connect_bd_net [get_bd_pins $ps7/FCLK_CLK0]    [get_bd_pins $rst/slowest_sync_cl
 connect_bd_net [get_bd_pins $ps7/FCLK_RESET0_N] [get_bd_pins $rst/ext_reset_in]
 
 # Expose clock + reset on the wrapper so the RTL top (i2c_test_top) can use them.
-make_bd_pins_external -name FCLK_CLK0          [get_bd_pins $ps7/FCLK_CLK0]
-make_bd_pins_external -name peripheral_aresetn [get_bd_pins $rst/peripheral_aresetn]
+# Use explicit create_bd_port + connect_bd_net: make_bd_pins_external does NOT
+# reliably expose a clock-source pin that already fans out to internal logic
+# (FCLK_CLK0 drives the reset block), and the port silently never reaches the
+# wrapper. Explicit ports guarantee the exact names i2c_test_top instantiates.
+create_bd_port -dir O FCLK_CLK0
+connect_bd_net [get_bd_pins $ps7/FCLK_CLK0] [get_bd_ports FCLK_CLK0]
+create_bd_port -dir O -from 0 -to 0 peripheral_aresetn
+connect_bd_net [get_bd_pins $rst/peripheral_aresetn] [get_bd_ports peripheral_aresetn]
 
 validate_bd_design
 save_bd_design
