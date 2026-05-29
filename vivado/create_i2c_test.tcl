@@ -146,9 +146,12 @@ if {[get_property PROGRESS [get_runs synth_1]] ne "100%"} {
 puts "INFO: Synthesis complete"
 
 # ------------------------------------------------------------------------------
-# 7 — Insert ILA on the mark_debug nets (netlist-insertion, project flow)
-#     Groups bus bits back into one probe each, then persists the debug core to
-#     the constraints set via save_constraints so implementation includes it.
+# 7 — Insert ILA on the mark_debug nets, then implement IN-MEMORY (UG908
+#     non-project debug flow). We deliberately do NOT save_constraints +
+#     launch_runs impl_1: round-tripping the debug core through the in-place
+#     source XDC mis-orders the probe constraints (probe connects emitted before
+#     create_debug_core) and corrupts the file. Keeping everything in this one
+#     open session sidesteps that entirely.
 # ------------------------------------------------------------------------------
 puts "INFO: === Step 7: Inserting ILA debug core ==="
 
@@ -197,36 +200,26 @@ foreach base [dict keys $groups] {
 set_property C_CLK_INPUT_FREQ_HZ 100000000 [get_debug_cores dbg_hub]
 set_property C_ENABLE_CLK_DIVIDER false     [get_debug_cores dbg_hub]
 connect_debug_port dbg_hub/clk $clk_net
-
-# Persist debug-core constraints so implementation builds them in.
-save_constraints
-close_design
-puts "INFO: ILA debug core inserted and saved to constraints"
+puts "INFO: ILA debug core inserted"
 
 # ------------------------------------------------------------------------------
-# 8 — Implementation + bitstream
+# 8 — Implementation + bitstream, in-memory on the instrumented netlist
 # ------------------------------------------------------------------------------
-puts "INFO: === Step 8: Implementation + bitstream ==="
+puts "INFO: === Step 8: Implementation + bitstream (in-memory) ==="
 
-launch_runs impl_1 -to_step write_bitstream -jobs 4
-wait_on_run impl_1
-if {[get_property PROGRESS [get_runs impl_1]] ne "100%"} {
-    error "ERROR: Implementation failed — status: [get_property STATUS [get_runs impl_1]]"
-}
-puts "INFO: Implementation + bitstream complete"
+opt_design
+place_design
+route_design
 
-# ------------------------------------------------------------------------------
-# 9 — Export .bit + .ltx to vivado/
-# ------------------------------------------------------------------------------
-puts "INFO: === Step 9: Exporting artifacts ==="
+report_utilization     -file [file join $project_dir util_i2c_test.rpt]
+report_timing_summary  -file [file join $project_dir timing_i2c_test.rpt]
 
-set bit_src [file join $project_dir ${project_name}.runs impl_1 i2c_test_top.bit]
-if {![file exists $bit_src]} { error "ERROR: bitstream not found at $bit_src" }
-file copy -force $bit_src [file join $script_dir i2c_test.bit]
-
-open_run impl_1
+# write_bitstream honours the UCIO-1 severity downgrade from i2c_test.xdc (the
+# inout adc_sda). Write straight to vivado/ — no impl_1 run dir to copy from.
+write_bitstream    -force [file join $script_dir i2c_test.bit]
 write_debug_probes -force [file join $script_dir i2c_test.ltx]
 close_design
+puts "INFO: Bitstream + debug probes written"
 
 puts ""
 puts "INFO: ============================================================"
