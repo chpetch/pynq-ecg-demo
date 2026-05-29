@@ -275,16 +275,19 @@ set_property name DAC_SCLK [get_bd_ports dac_sclk_0]
 set_property name DAC_DIN  [get_bd_ports dac_din_0]
 
 # ADC I2C — JB header. The AXI IIC IP owns the SCL/SDA pads. Make its IIC
-# interface external; Vivado auto-inserts IOBUF primitives and exposes
-# inout top-level ports. For AXI IIC v2.1, the resulting BD interface port
-# is named "IIC_0" with scalar sub-ports `scl_io` and `sda_io`.
+# interface external; Vivado infers IOBUFs at make_wrapper time and the
+# top-level wrapper exposes inout ports named IIC_ADC_scl_io / IIC_ADC_sda_io.
+# We can't rename them at BD level (only the interface as a whole exists at
+# BD level — the _io sub-ports only appear after make_wrapper). The XDC has
+# been updated to reference IIC_ADC_scl_io / IIC_ADC_sda_io directly.
 make_bd_intf_pins_external -name IIC_ADC [get_bd_intf_pins $axi_iic/IIC]
 
-# Rename the scalar inout pins inside the interface to match XDC net names.
-# After make_external with -name IIC_ADC, Vivado creates IIC_ADC_scl_io and
-# IIC_ADC_sda_io as inout ports on the top-level wrapper.
-set_property name adc_scl [get_bd_ports IIC_ADC_scl_io]
-set_property name adc_sda [get_bd_ports IIC_ADC_sda_io]
+# Debug: list whatever ports get created so the build log shows the truth
+# even if Vivado's naming convention shifts in a future version.
+puts "INFO:   AXI IIC interface promoted to external. BD sub-pins:"
+foreach p [get_bd_pins -of_objects [get_bd_intf_ports IIC_ADC] -quiet] {
+    puts "INFO:     $p"
+}
 
 # Bottom-row JB pads — T15/T14 are shorted to SCL/SDA via PMOD AD2 internal
 # wiring (pins 1↔5 and 2↔6). Constrained with PULLUP so the floating pads

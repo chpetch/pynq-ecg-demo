@@ -63,16 +63,19 @@ set_property DRIVE 8 [get_ports {DAC_SCLK}]
 # JB Header — ADC I2C (ecg_process_top)
 # ==============================================================================
 
-# JB[2] — ADC_SCL (I2C clock, output) — physical pin JB3 = V10 (PMOD AD2 Pin 1)
-set_property PACKAGE_PIN V10 [get_ports {adc_scl}]
-set_property IOSTANDARD  LVCMOS33 [get_ports {adc_scl}]
-set_property DRIVE 8 [get_ports {adc_scl}]
-set_property PULLTYPE PULLUP [get_ports {adc_scl}]
+# JB[2] — ADC_SCL (I2C clock, inout) — physical pin JB3 = V10 (PMOD AD2 Pin 1)
+# Port name comes from Vivado wrapper auto-generation when AXI IIC IP's IIC
+# interface is made external with name "IIC_ADC". The wrapper instantiates
+# IOBUF primitives and exposes inout top-level ports named IIC_ADC_*_io.
+set_property PACKAGE_PIN V10 [get_ports {IIC_ADC_scl_io}]
+set_property IOSTANDARD  LVCMOS33 [get_ports {IIC_ADC_scl_io}]
+set_property DRIVE 8 [get_ports {IIC_ADC_scl_io}]
+set_property PULLTYPE PULLUP [get_ports {IIC_ADC_scl_io}]
 
-# JB[3] — ADC_SDA (I2C data, bidirectional) — physical pin JB4 = W10 (PMOD AD2 Pin 2)
-set_property PACKAGE_PIN W10 [get_ports {adc_sda}]
-set_property IOSTANDARD  LVCMOS33 [get_ports {adc_sda}]
-set_property PULLTYPE PULLUP [get_ports {adc_sda}]
+# JB[3] — ADC_SDA (I2C data, inout) — physical pin JB4 = W10 (PMOD AD2 Pin 2)
+set_property PACKAGE_PIN W10 [get_ports {IIC_ADC_sda_io}]
+set_property IOSTANDARD  LVCMOS33 [get_ports {IIC_ADC_sda_io}]
+set_property PULLTYPE PULLUP [get_ports {IIC_ADC_sda_io}]
 
 # JB[6] / JB[7] — bottom-row pads shorted to SCL/SDA via PMOD AD2 internal
 # wiring (AD2 pins 1↔5 and 2↔6 are bonded on the connector). Constrain with
