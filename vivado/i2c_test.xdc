@@ -40,3 +40,16 @@ set_property IOSTANDARD  LVCMOS33 [get_ports {led[1]}]
 # Downgrade Vivado's overly strict inout DRC to a warning so bitstream
 # generation proceeds (Xilinx-recommended workaround).
 set_property SEVERITY {Warning} [get_drc_checks UCIO-1]
+
+# ==============================================================================
+# Unused-pin contention fix (the whole point of this rebuild)
+# ==============================================================================
+# Vivado's DEFAULT for unused device pins is a weak PULL-DOWN. The Pmod AD2
+# internally bridges its top-row pins to the bottom-row pins, so SCL (V10) and
+# SDA (W10) are each tied to an unused JB pin. With those bridged pins pulled
+# DOWN by default, they fight our pull-ups and divide the line to a marginal
+# voltage: the FPGA input still reads '1' (threshold ~1.4 V) but the AD7991's
+# VIH (~2.31 V) sees an invalid level -> it never ACKs. The PYNQ base overlay
+# floats all 8 JB pins, which is why Pmod_IIC works on the identical pins.
+# Make every unused pin high-Z to match the base overlay and kill the divider.
+set_property BITSTREAM.CONFIG.UNUSEDPIN Pullnone [current_design]
