@@ -248,6 +248,14 @@ make_bd_pins_external [get_bd_pins $ecg_proc/adc_sda]
 set_property name adc_scl [get_bd_ports adc_scl_0]
 set_property name adc_sda [get_bd_ports adc_sda_0]
 
+# Bottom-row JB pads — shorted to adc_scl/adc_sda inside the PMOD AD2
+# connector. Constrained with PULLUP in the XDC to keep them from floating
+# and injecting noise back onto the I2C bus. Not connected to any logic.
+make_bd_pins_external [get_bd_pins $ecg_proc/adc_scl_alt]
+make_bd_pins_external [get_bd_pins $ecg_proc/adc_sda_alt]
+set_property name adc_scl_alt [get_bd_ports adc_scl_alt_0]
+set_property name adc_sda_alt [get_bd_ports adc_sda_alt_0]
+
 # ------------------------------------------------------------------------------
 # 9 — Address assignment
 # ------------------------------------------------------------------------------

@@ -63,19 +63,28 @@ set_property DRIVE 8 [get_ports {DAC_SCLK}]
 # JB Header — ADC I2C (ecg_process_top)
 # ==============================================================================
 
-# JB[3] — ADC_SCL (I2C clock, output) — physical pin JB4 = W10
-# SWAPPED from V10 to W10 — testing the PMOD AD2 silkscreen-mislabel theory
-# reported in https://discuss.pynq.io/t/pmod-communication-through-i2c/2130/4
-set_property PACKAGE_PIN W10 [get_ports {adc_scl}]
+# JB[2] — ADC_SCL (I2C clock, output) — physical pin JB3 = V10 (PMOD AD2 Pin 1)
+set_property PACKAGE_PIN V10 [get_ports {adc_scl}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_scl}]
 set_property DRIVE 8 [get_ports {adc_scl}]
 set_property PULLTYPE PULLUP [get_ports {adc_scl}]
 
-# JB[2] — ADC_SDA (I2C data, bidirectional) — physical pin JB3 = V10
-# SWAPPED from W10 to V10 (see note on adc_scl above)
-set_property PACKAGE_PIN V10 [get_ports {adc_sda}]
+# JB[3] — ADC_SDA (I2C data, bidirectional) — physical pin JB4 = W10 (PMOD AD2 Pin 2)
+set_property PACKAGE_PIN W10 [get_ports {adc_sda}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_sda}]
 set_property PULLTYPE PULLUP [get_ports {adc_sda}]
+
+# JB[6] / JB[7] — bottom-row pads shorted to SCL/SDA via PMOD AD2 internal
+# wiring (AD2 pins 1↔5 and 2↔6 are bonded on the connector). Constrain with
+# PULLUP so the floating pads can't oscillate and inject noise back onto the
+# I2C bus through the short. Inputs only — not connected to any logic.
+set_property PACKAGE_PIN T15 [get_ports {adc_scl_alt}]
+set_property IOSTANDARD  LVCMOS33 [get_ports {adc_scl_alt}]
+set_property PULLTYPE PULLUP [get_ports {adc_scl_alt}]
+
+set_property PACKAGE_PIN T14 [get_ports {adc_sda_alt}]
+set_property IOSTANDARD  LVCMOS33 [get_ports {adc_sda_alt}]
+set_property PULLTYPE PULLUP [get_ports {adc_sda_alt}]
 
 # ==============================================================================
 # DRC overrides

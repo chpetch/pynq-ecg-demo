@@ -13,6 +13,13 @@ module ecg_process_top (
     inout  wire        adc_sda,
     output wire        adc_scl,
 
+    // Bottom-row JB pads shorted to adc_scl/adc_sda via PMOD AD2 internal
+    // connector wiring (pins 1↔5 and 2↔6). Declared as inputs to hold them
+    // with PULLUP constraints and prevent floating-pad noise injection.
+    // Not connected to any internal logic.
+    input  wire        adc_scl_alt,
+    input  wire        adc_sda_alt,
+
     // AXI4-Lite slave interface
     input  wire        s_axi_aclk,
     input  wire        s_axi_aresetn,
