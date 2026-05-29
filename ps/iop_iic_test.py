@@ -28,14 +28,17 @@ def main():
     ol = Overlay(BIT)
     print("  [OK] overlay loaded")
 
-    iops = [k for k in ol.ip_dict if "iop_pmodb" in k]
-    print("  iop_pmodb entries in ip_dict:", iops)
-    if not (iops or hasattr(ol, "iop_pmodb")):
+    if not hasattr(ol, "iop_pmodb"):
         print("  [FAIL] PYNQ did not bind iop_pmodb -- check pynq.__version__ is 3.0.x")
         return
+    print("  [OK] iop_pmodb recognised as:", type(ol.iop_pmodb).__name__)
+    # MicroblazeHierarchy exposes the mb_info dict that Pmod_IIC needs (passing
+    # the hierarchy object itself raises 'not subscriptable').
+    mb_info = ol.iop_pmodb.mb_info
+    print("      mb_info:", mb_info)
 
     print("Init Pmod_IIC on PMODB pins 2(SCL/V10), 3(SDA/W10), addr 0x%02X" % I2C_ADDR)
-    iic = Pmod_IIC(ol.iop_pmodb, 2, 3, I2C_ADDR)
+    iic = Pmod_IIC(mb_info, 2, 3, I2C_ADDR)
     print("  [OK] Pmod_IIC initialised")
 
     print("Reading CH0 10x:")
