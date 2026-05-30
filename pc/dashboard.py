@@ -3,6 +3,8 @@ PYNQ-Z2 ECG Dashboard
 Streamlit single-file app. All mutable state lives in st.session_state.
 """
 
+from __future__ import annotations  # PEP 604 unions (dict | None) on Python 3.8
+
 import asyncio
 import collections
 import csv
