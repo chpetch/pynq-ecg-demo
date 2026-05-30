@@ -42,3 +42,7 @@ sessions/
 
 # OS
 .DS_Store
+
+# Verification capture outputs (regenerable from the board)
+captures/*.png
+captures/*.csv

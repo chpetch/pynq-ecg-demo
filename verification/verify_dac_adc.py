@@ -1,24 +1,23 @@
 # -*- coding: utf-8 -*-
 #!/usr/bin/env python3
 """
-dac_adc_test.py -- combined DAC + ADC bring-up test for the AXI-IIC build of
-ecg_demo.bit (the build that places the AD7991-0 on JB SCL=T11 / SDA=T10).
+verify_dac_adc.py -- subsystem verification: DAC + ADC bring-up on the AXI-IIC
+build of ecg_demo.bit (AD7991-0 on JB SCL=T11 / SDA=T10).
 
 Run ON THE BOARD as root (overlay load needs FPGA access):
-    sudo /usr/local/share/pynq-venv/bin/python3 .../ps/dac_adc_test.py
-    sudo /usr/local/share/pynq-venv/bin/python3 .../ps/dac_adc_test.py --mmio   # force raw-MMIO ADC path
+    sudo bash -c 'source /etc/profile.d/pynq_venv.sh; source /etc/profile.d/xrt_setup.sh; \
+        python3 verification/verify_dac_adc.py'
+    ... verify_dac_adc.py --mmio     # force raw-MMIO ADC path
 
-DAC PASS  : ECG_DAC (0x40) sweeps a wide range as the DDS walks the ROM.
-ADC PASS  : AD7991 ACKs and returns CH0 (~4095 if CH0 tied to VCC, tracks input).
+PASS criteria:
+  DAC : ECG_DAC (0x40) sweeps a wide range as the DDS walks the ROM.
+  ADC : AD7991 ACKs and returns CH0 data via the AXI IIC core.
 """
 
 import os
 import sys
 import time
 from pynq import Overlay, MMIO
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-BIT  = os.path.join(HERE, "ecg_demo.bit")   # ecg_demo.hwh must sit alongside
 
 # --- custom AXI-Lite register block (ecg_process_top) ---
 BASE_ADDR   = 0x43C00000
@@ -27,22 +26,36 @@ REG_ECG_RAW = 0x28
 REG_BPM_OUT = 0x30
 REG_STATUS  = 0x3C
 REG_ECG_DAC = 0x40
-N_DAC       = 720          # ~2 s at 360 Hz -> covers >1 cardiac cycle
+N_DAC       = 720          # ~2 s at 360 Hz
 DAC_DT      = 1.0 / 360
 
 # --- AD7991-0 via Xilinx AXI IIC IP ---
 I2C_ADDR  = 0x28
-CFG_CH0   = 0x10           # enable CH0, Vcc reference, no filter
+CFG_CH0   = 0x10
 IIC_BASE  = 0x41600000
+
+
+def find_bitstream():
+    """Locate ecg_demo.bit regardless of where this script is run from."""
+    cands = []
+    if os.environ.get("ECG_BIT"):
+        cands.append(os.environ["ECG_BIT"])
+    here = os.path.dirname(os.path.abspath(__file__))
+    cands += [
+        os.path.join(here, "ecg_demo.bit"),
+        os.path.join(here, "..", "ps", "ecg_demo.bit"),
+        "/home/xilinx/jupyter_notebooks/pynq-ecg-demo/ps/ecg_demo.bit",
+    ]
+    for c in cands:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    raise FileNotFoundError("ecg_demo.bit not found; tried:\n  " + "\n  ".join(cands))
 
 
 def test_dac(ol):
     print("\n[DAC] sampling ECG_DAC (0x40) for ~2 s ...")
     mmio = MMIO(BASE_ADDR, MAP_SIZE)
-    vals = []
-    for _ in range(N_DAC):
-        vals.append(mmio.read(REG_ECG_DAC) & 0xFFF)
-        time.sleep(DAC_DT)
+    vals = [mmio.read(REG_ECG_DAC) & 0xFFF for _ in _rate_loop(N_DAC, DAC_DT)]
     mn, mx = min(vals), max(vals)
     rng = mx - mn
     print("  ECG_DAC: min=0x%03X max=0x%03X range=%d" % (mn, mx, rng))
@@ -53,6 +66,12 @@ def test_dac(ol):
           "sweeps %d counts -- DDS is walking the ROM" % rng if ok
           else "is flat -- DDS frozen / bitstream missing fix"))
     return ok
+
+
+def _rate_loop(n, dt):
+    for _ in range(n):
+        yield
+        time.sleep(dt)
 
 
 def adc_pynq(ol, n=10):
@@ -122,8 +141,9 @@ def test_adc(ol, force_mmio):
 
 def main():
     force_mmio = "--mmio" in sys.argv
-    print("Loading overlay:", BIT)
-    ol = Overlay(BIT)
+    bit = find_bitstream()
+    print("Loading overlay:", bit)
+    ol = Overlay(bit)
     print("  [OK] overlay loaded")
     dac_ok = test_dac(ol)
     adc_ok = test_adc(ol, force_mmio)
