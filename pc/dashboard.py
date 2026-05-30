@@ -115,16 +115,11 @@ async def _ws_receive(board_ip: str, stop_event: threading.Event) -> None:
     while not stop_event.is_set():
         try:
             async with websockets.connect(uri, ping_interval=20) as ws:
-                # Fetch current config on first successful connect
-                if not st.session_state.get("config_fetched", False):
-                    cfg = _fetch_config(board_ip)
-                    if cfg:
-                        st.session_state["slider_bpm"]    = cfg.get("bpm_ch_a",         DEFAULT_BPM)
-                        st.session_state["slider_rr"]     = cfg.get("rr_fluct",          DEFAULT_RR)
-                        st.session_state["slider_amp"]    = cfg.get("amp_fluct",         DEFAULT_AMP)
-                        st.session_state["slider_thresh"] = cfg.get("detect_threshold",  DEFAULT_THRESHOLD)
-                        st.session_state["config_fetched"] = True
-
+                # NOTE: do NOT write widget-keyed session_state (slider_*) from
+                # this thread — Streamlit raises if a widget key is modified
+                # after the widget is instantiated, which drops the socket and
+                # causes a connect/disconnect retry loop. Slider population is
+                # done on the main thread in the Connect handler instead.
                 st.session_state["connected"] = True
 
                 async for raw in ws:
@@ -400,13 +395,19 @@ def main() -> None:
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
             if st.button("Connect", use_container_width=True):
+                # Populate sliders from the board here (main thread, BEFORE the
+                # slider widgets below are instantiated — the only safe place to
+                # set widget-keyed session_state).
+                cfg = _fetch_config(ip_input)
+                if cfg:
+                    st.session_state["slider_bpm"]    = cfg.get("bpm_ch_a",        st.session_state["slider_bpm"])
+                    st.session_state["slider_rr"]     = cfg.get("rr_fluct",         st.session_state["slider_rr"])
+                    st.session_state["slider_amp"]    = cfg.get("amp_fluct",        st.session_state["slider_amp"])
+                    st.session_state["slider_thresh"] = cfg.get("detect_threshold", st.session_state["slider_thresh"])
                 _start_ws(ip_input)
         with btn_col2:
             if st.button("Disconnect", use_container_width=True):
                 _stop_ws()
-
-        if connected and not st.session_state.get("config_fetched", False):
-            st.spinner("Reconnecting…")
 
         st.divider()
         st.markdown("#### Config")
