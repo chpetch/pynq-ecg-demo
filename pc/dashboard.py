@@ -18,6 +18,10 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 import websockets
+# Background threads must carry the session's ScriptRunContext, or Streamlit
+# (>=1.27) silently drops their st.session_state writes and st.rerun() calls
+# ("missing ScriptRunContext!"), leaving the UI stuck on "Disconnected".
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -170,6 +174,7 @@ def _start_ws(board_ip: str) -> None:
         args=(board_ip, stop_ev),
         daemon=True,
     )
+    add_script_run_ctx(t)   # so the thread's session_state writes take effect
     t.start()
     st.session_state["ws_thread"] = t
 
@@ -182,32 +187,10 @@ def _stop_ws() -> None:
     st.session_state["config_fetched"] = False
 
 
-# ---------------------------------------------------------------------------
-# Rerun trigger thread (~10 fps)
-# ---------------------------------------------------------------------------
-def _rerun_thread_target(stop_event: threading.Event) -> None:
-    """Wake Streamlit every 100 ms so the chart refreshes."""
-    while not stop_event.is_set():
-        time.sleep(0.1)
-        try:
-            st.rerun()
-        except Exception:
-            pass
-
-
-def _ensure_rerun_thread() -> None:
-    t = st.session_state.get("rerun_thread")
-    stop_ev = st.session_state.get("stop_rerun")
-    if t is None or not t.is_alive():
-        new_stop = threading.Event()
-        st.session_state["stop_rerun"] = new_stop
-        nt = threading.Thread(
-            target=_rerun_thread_target,
-            args=(new_stop,),
-            daemon=True,
-        )
-        nt.start()
-        st.session_state["rerun_thread"] = nt
+# Live refresh is driven from the MAIN thread at the end of main() (see
+# _live_refresh). A background thread calling st.rerun() is unreliable — the
+# RerunException it raises is not caught by Streamlit's script runner — so the
+# old rerun-trigger thread was removed in favour of the main-thread loop.
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +307,6 @@ def main() -> None:
     )
 
     _init_state()
-    _ensure_rerun_thread()
 
     # Flush any deferred toasts / errors from previous rerun
     if st.session_state["toast_pending"]:
@@ -479,6 +461,18 @@ def main() -> None:
 
         if recording_snapshot:
             st.caption(f"{len(recording_snapshot)} samples recorded")
+
+    _live_refresh()
+
+
+def _live_refresh() -> None:
+    """Drive reruns from the main thread (~10 fps) while the WS client thread is
+    alive, so the chart scrolls. Reliable across Streamlit versions, unlike a
+    background thread's st.rerun()."""
+    ws_thread = st.session_state.get("ws_thread")
+    if ws_thread is not None and ws_thread.is_alive():
+        time.sleep(0.1)
+        st.rerun()
 
 
 if __name__ == "__main__":
