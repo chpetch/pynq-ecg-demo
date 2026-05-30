@@ -242,9 +242,9 @@ def _build_chart(buffer_snapshot: list) -> go.Figure:
 
     fig.add_trace(go.Scatter(
         x=times, y=raw,
-        name="Raw ECG",
-        line=dict(color=COLOR_RAW, width=1),
-        opacity=0.4,
+        name="ADC (live, CH0)",
+        line=dict(color=COLOR_RAW, width=1.5),
+        opacity=0.9,
         mode="lines",
     ))
 
