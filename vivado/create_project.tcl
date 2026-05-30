@@ -351,7 +351,7 @@ puts "INFO: Top-level wrapper set to ecg_system_wrapper"
 # ------------------------------------------------------------------------------
 puts "INFO: === Step 12: Running synthesis (this takes ~10 minutes) ==="
 
-launch_runs synth_1 -jobs 4
+launch_runs synth_1 -jobs 2
 wait_on_run synth_1
 
 if {[get_property PROGRESS [get_runs synth_1]] ne "100%"} {
@@ -365,7 +365,7 @@ puts "INFO: Synthesis complete"
 # ------------------------------------------------------------------------------
 puts "INFO: === Step 13: Running implementation + bitstream (~20 minutes) ==="
 
-launch_runs impl_1 -to_step write_bitstream -jobs 4
+launch_runs impl_1 -to_step write_bitstream -jobs 2
 wait_on_run impl_1
 
 if {[get_property PROGRESS [get_runs impl_1]] ne "100%"} {
