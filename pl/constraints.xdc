@@ -1,100 +1,70 @@
 # constraints.xdc
 # Project  : PYNQ-Z2 ECG Demo
-# Agent    : pynq_ecg_process
-# Purpose  : Pin constraints for JA (DAC SPI) and JB (ADC I2C) PMOD headers
+# Purpose  : Pin constraints for JA (DAC SPI) and JB (ADC I2C via AXI IIC IP).
 #
-# Reference: PYNQ-Z2 Master Constraints (TUL PYNQ-Z2 schematic rev C)
-# All PMOD pins use LVCMOS33 I/O standard at 3.3 V.
+# PINS ARE THE OFFICIAL PYNQ-Z2 MAP (copied from the base overlay base.xdc:
+# vivado/pynq_src/boards/Pynq-Z2/base/vivado/constraints/base.xdc). The earlier
+# pin map in this file was WRONG (JB as V10/W10, DAC SCLK on T10) — the AD7991
+# is on JB = SCL T11 / SDA T10 (hardware-proven: the MicroBlaze IOP build read
+# 4095 on these exact pins). V10/W10 had no chip attached.
 #
-# JA Header — PMOD DA4 (AD5628-1) SPI DAC
-#   JA[0] = DAC_CS_N   (SPI chip select, active low)
-#   JA[1] = DAC_DIN    (SPI MOSI)
-#   JA[3] = DAC_SCLK   (SPI clock)
-#   JA[2] = (unused)
+# Official PYNQ-Z2 headers:
+#   JA (PMODA) pins[0..7] = Y18, Y19, Y16, Y17, U18, U19, W18, W19
+#   JB (PMODB) pins[0..7] = W14, Y14, T11, T10, V16, W16, V12, W13
 #
-# JB Header — PMOD AD2 (AD7991-0) I2C ADC
-#   JB[0] = (unused)
-#   JB[1] = (unused)
-#   JB[2] = ADC_SCL    (I2C clock, output)                  ← right half, Pin 1
-#   JB[3] = ADC_SDA    (I2C data, bidirectional open-drain)  ← right half, Pin 2
-#
-# PMOD AD2 pinout: Pin 1 = SCL, Pin 2 = SDA (Digilent I2C PMOD standard).
-# PMOD AD2 plugs directly into the RIGHT half of JB (physical pins JB3/JB4).
-# Moved from JB[0]/JB[1] so the module seats without jumper wires.
-#
-# PYNQ-Z2 JA schematic net names and package pins:
-#   JA1 / JA[0]  -> V15
-#   JA2 / JA[1]  -> W15
-#   JA3 / JA[2]  -> T11  (unused)
-#   JA4 / JA[3]  -> T10
-#   JA7 / JA[4]  -> W14  (unused)
-#   JA8 / JA[5]  -> Y14  (unused)
-#   JA9 / JA[6]  -> T12  (unused)
-#   JA10/ JA[7]  -> U12  (unused)
-#
-# PYNQ-Z2 JB schematic net names and package pins:
-#   JB1 / JB[0]  -> W12
-#   JB2 / JB[1]  -> W11
-#   JB3 / JB[2]  -> V10  ← ADC_SCL (PMOD Pin 1)
-#   JB4 / JB[3]  -> W10  ← ADC_SDA (PMOD Pin 2)
-#   JB7 / JB[4]  -> V12  (unused)
-#   JB8 / JB[5]  -> W13  (unused)
-#   JB9 / JB[6]  -> T15  (unused)
-#   JB10/ JB[7]  -> T14  (unused)
+# JA — PMOD DA4 (AD5628-1) SPI DAC, driven by ecg_signal_gen_top:
+#   JA[0] DAC_CS_N -> Y18    JA[1] DAC_DIN -> Y19    JA[3] DAC_SCLK -> Y17
+# JB — PMOD AD2 (AD7991-0) I2C ADC via Xilinx AXI IIC IP (IIC interface external):
+#   JB[2] SCL -> T11 (IIC_ADC_scl_io)    JB[3] SDA -> T10 (IIC_ADC_sda_io)
+#   AD2 internally bridges JB pins 2<->6 and 3<->7, so pull up the partners
+#   JB[6]=V12 and JB[7]=W13 too (matches base.xdc which pulls up pmodb 2,3,6,7).
 
 # ==============================================================================
 # JA Header — DAC SPI (ecg_signal_gen_top)
 # ==============================================================================
 
 # JA[0] — DAC_CS_N (SPI chip select)
-set_property PACKAGE_PIN V15 [get_ports {DAC_CS_N}]
+set_property PACKAGE_PIN Y18 [get_ports {DAC_CS_N}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {DAC_CS_N}]
 
 # JA[1] — DAC_DIN (SPI MOSI)
-set_property PACKAGE_PIN W15 [get_ports {DAC_DIN}]
+set_property PACKAGE_PIN Y19 [get_ports {DAC_DIN}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {DAC_DIN}]
 
 # JA[3] — DAC_SCLK (SPI clock)
-set_property PACKAGE_PIN T10 [get_ports {DAC_SCLK}]
+set_property PACKAGE_PIN Y17 [get_ports {DAC_SCLK}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {DAC_SCLK}]
 set_property DRIVE 8 [get_ports {DAC_SCLK}]
 
 # ==============================================================================
-# JB Header — ADC I2C (ecg_process_top)
+# JB Header — ADC I2C (AXI IIC IP, IIC interface external = IIC_ADC)
 # ==============================================================================
 
-# JB[2] — ADC_SCL (I2C clock, inout) — physical pin JB3 = V10 (PMOD AD2 Pin 1)
-# Port name comes from Vivado wrapper auto-generation when AXI IIC IP's IIC
-# interface is made external with name "IIC_ADC". The wrapper instantiates
-# IOBUF primitives and exposes inout top-level ports named IIC_ADC_*_io.
-set_property PACKAGE_PIN V10 [get_ports {IIC_ADC_scl_io}]
+# JB[2] — SCL (AD7991 I2C clock, inout open-drain). Wrapper exposes IIC_ADC_scl_io.
+set_property PACKAGE_PIN T11 [get_ports {IIC_ADC_scl_io}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {IIC_ADC_scl_io}]
 set_property DRIVE 8 [get_ports {IIC_ADC_scl_io}]
 set_property PULLTYPE PULLUP [get_ports {IIC_ADC_scl_io}]
 
-# JB[3] — ADC_SDA (I2C data, inout) — physical pin JB4 = W10 (PMOD AD2 Pin 2)
-set_property PACKAGE_PIN W10 [get_ports {IIC_ADC_sda_io}]
+# JB[3] — SDA (AD7991 I2C data, inout open-drain). Wrapper exposes IIC_ADC_sda_io.
+set_property PACKAGE_PIN T10 [get_ports {IIC_ADC_sda_io}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {IIC_ADC_sda_io}]
 set_property PULLTYPE PULLUP [get_ports {IIC_ADC_sda_io}]
 
-# JB[6] / JB[7] — bottom-row pads shorted to SCL/SDA via PMOD AD2 internal
-# wiring (AD2 pins 1↔5 and 2↔6 are bonded on the connector). Constrain with
-# PULLUP so the floating pads can't oscillate and inject noise back onto the
-# I2C bus through the short. Inputs only — not connected to any logic.
-set_property PACKAGE_PIN T15 [get_ports {adc_scl_alt}]
+# JB[6]=V12 / JB[7]=W13 — AD2 internal bridge partners of SCL(2)/SDA(3). Pull up
+# so they cannot divide the I2C lines to a marginal level. Dummy inputs only.
+set_property PACKAGE_PIN V12 [get_ports {adc_scl_alt}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_scl_alt}]
 set_property PULLTYPE PULLUP [get_ports {adc_scl_alt}]
 
-set_property PACKAGE_PIN T14 [get_ports {adc_sda_alt}]
+set_property PACKAGE_PIN W13 [get_ports {adc_sda_alt}]
 set_property IOSTANDARD  LVCMOS33 [get_ports {adc_sda_alt}]
 set_property PULLTYPE PULLUP [get_ports {adc_sda_alt}]
 
 # ==============================================================================
 # DRC overrides
 # ==============================================================================
-
-# UCIO-1: adc_sda is an inout (open-drain I2C) — pin W10 IS constrained above.
-# Vivado's write_bitstream DRC is overly strict with inout ports from block
-# designs. Downgrade to warning so bitstream generation proceeds.
-# This is the Xilinx-recommended workaround (see DRC UCIO-1 error message).
+# UCIO-1: IIC_ADC_*_io are inout (open-drain I2C) from the block-design IIC
+# interface — constrained above. Downgrade Vivado's overly strict inout DRC to a
+# warning so bitstream generation proceeds (Xilinx-recommended workaround).
 set_property SEVERITY {Warning} [get_drc_checks UCIO-1]
