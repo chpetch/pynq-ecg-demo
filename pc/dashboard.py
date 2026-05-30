@@ -187,10 +187,10 @@ def _stop_ws() -> None:
     st.session_state["config_fetched"] = False
 
 
-# Live refresh is driven from the MAIN thread at the end of main() (see
-# _live_refresh). A background thread calling st.rerun() is unreliable — the
-# RerunException it raises is not caught by Streamlit's script runner — so the
-# old rerun-trigger thread was removed in favour of the main-thread loop.
+# Live refresh is handled by st.fragment(run_every=...) on the status and chart
+# regions (see _status_fragment / _chart_fragment). A background thread calling
+# st.rerun() is unreliable (its RerunException isn't caught by the script
+# runner) and a main-thread full rerun loop flickers, so both were dropped.
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +297,57 @@ def _build_csv(recording: list) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Live regions — st.fragment(run_every=...) reruns ONLY these blocks on a timer,
+# so the chart/status update smoothly without a full-page rerun (which flickers).
+# The WS background thread (with ScriptRunContext) fills session_state; these
+# fragments just read and render it.
+# ---------------------------------------------------------------------------
+@st.fragment(run_every="0.3s")
+def _status_fragment() -> None:
+    connected = st.session_state["connected"]
+    lead_off  = st.session_state["lead_off"]
+    last_bpm  = st.session_state["last_bpm"]
+    prev_bpm  = st.session_state["prev_bpm"]
+    board_ip  = st.session_state["board_ip"]
+
+    if lead_off:
+        st.markdown('<span style="color:#FFAA00;font-size:1.1em">⚠ Signal Lost</span>',
+                    unsafe_allow_html=True)
+    elif connected:
+        st.markdown(f'<span style="color:#00CC44;font-size:1.1em">● Connected — {board_ip}</span>',
+                    unsafe_allow_html=True)
+    else:
+        st.markdown('<span style="color:#CC2222;font-size:1.1em">● Disconnected</span>',
+                    unsafe_allow_html=True)
+
+    bpm_delta = last_bpm - prev_bpm
+    bpm_color = "normal" if 50 <= last_bpm <= 100 else "off"
+    st.metric(
+        label="Heart Rate",
+        value=f"{last_bpm} BPM",
+        delta=f"{bpm_delta:+d}" if prev_bpm else None,
+        delta_color=bpm_color,
+    )
+
+
+@st.fragment(run_every="0.1s")
+def _chart_fragment() -> None:
+    connected = st.session_state["connected"]
+    with st.session_state["buffer_lock"]:
+        snapshot = list(st.session_state["buffer"])
+    if snapshot:
+        st.plotly_chart(
+            _build_chart(snapshot),
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+    elif connected:
+        st.info("Waiting for ECG data…")
+    else:
+        st.info("Not connected. Enter board IP and click Connect.")
+
+
+# ---------------------------------------------------------------------------
 # Main app
 # ---------------------------------------------------------------------------
 def main() -> None:
@@ -314,43 +365,16 @@ def main() -> None:
         st.session_state["toast_pending"] = None
 
     # -----------------------------------------------------------------------
-    # Header row
+    # Header row — status/BPM live in a fragment so they update without a
+    # full-page rerun.
     # -----------------------------------------------------------------------
-    connected   = st.session_state["connected"]
-    lead_off    = st.session_state["lead_off"]
-    last_bpm    = st.session_state["last_bpm"]
-    prev_bpm    = st.session_state["prev_bpm"]
-    board_ip    = st.session_state["board_ip"]
+    connected = st.session_state["connected"]
 
     header_left, header_right = st.columns([3, 1])
     with header_left:
         st.markdown("## PYNQ-Z2 ECG Demo")
-
     with header_right:
-        if lead_off:
-            st.markdown(
-                '<span style="color:#FFAA00;font-size:1.1em">⚠ Signal Lost</span>',
-                unsafe_allow_html=True,
-            )
-        elif connected:
-            st.markdown(
-                f'<span style="color:#00CC44;font-size:1.1em">● Connected — {board_ip}</span>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                '<span style="color:#CC2222;font-size:1.1em">● Disconnected</span>',
-                unsafe_allow_html=True,
-            )
-
-        bpm_delta = last_bpm - prev_bpm
-        bpm_color = "normal" if 50 <= last_bpm <= 100 else "off"
-        st.metric(
-            label="Heart Rate",
-            value=f"{last_bpm} BPM",
-            delta=f"{bpm_delta:+d}" if prev_bpm else None,
-            delta_color=bpm_color,
-        )
+        _status_fragment()
 
     st.divider()
 
@@ -359,23 +383,9 @@ def main() -> None:
     # -----------------------------------------------------------------------
     col_chart, col_ctrl = st.columns([3, 1])
 
-    # ---- Left: waveform ----------------------------------------------------
+    # ---- Left: waveform (live fragment) ------------------------------------
     with col_chart:
-        chart_placeholder = st.empty()
-        with st.session_state["buffer_lock"]:
-            snapshot = list(st.session_state["buffer"])
-
-        if snapshot:
-            chart_placeholder.plotly_chart(
-                _build_chart(snapshot),
-                use_container_width=True,
-                config={"displayModeBar": False},
-            )
-        else:
-            if connected:
-                chart_placeholder.info("Waiting for ECG data…")
-            else:
-                chart_placeholder.info("Not connected. Enter board IP and click Connect.")
+        _chart_fragment()
 
     # ---- Right: controls ---------------------------------------------------
     with col_ctrl:
@@ -461,18 +471,6 @@ def main() -> None:
 
         if recording_snapshot:
             st.caption(f"{len(recording_snapshot)} samples recorded")
-
-    _live_refresh()
-
-
-def _live_refresh() -> None:
-    """Drive reruns from the main thread (~10 fps) while the WS client thread is
-    alive, so the chart scrolls. Reliable across Streamlit versions, unlike a
-    background thread's st.rerun()."""
-    ws_thread = st.session_state.get("ws_thread")
-    if ws_thread is not None and ws_thread.is_alive():
-        time.sleep(0.1)
-        st.rerun()
 
 
 if __name__ == "__main__":
