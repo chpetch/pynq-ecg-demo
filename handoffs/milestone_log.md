@@ -397,3 +397,36 @@ iic.write(0x100, 0x01)   # CR = EN
 while iic.read(0x104) & 0x04: pass   # wait BB=0
 ```
 
+---
+
+## Hardware Bring-up — DAC + ADC both PASS on AXI-IIC build (2026-05-30)
+
+**Context:** Resumed after a VSCode crash interrupted a clean Vivado rebuild. Goal:
+test DAC+ADC on hardware before fixing FIR timing.
+
+**Rebuild:** Re-ran `vivado/create_project.tcl` (AXI-IIC build, correct pins
+SCL=T11/SDA=T10, AD5628 DAC fix, `-jobs 2`). Clean: 0 errors, 0 critical warnings,
+fresh `ps/ecg_demo.bit` (4.0 MB) + `.hwh`. FIR WNS = −6.8 ns (known, harmless @360 Hz).
+
+**Build environment gotcha:** `create_bd_design` failed with "couldn't read file
+init.tcl/utils_dbg.tcl: No error" — a Windows Defender on-access sharing-violation on
+Vivado's own `scripts/ipintegrator/*.tcl`. Fix: pre-read that dir to warm Defender's
+scan cache, then launch immediately. (Permanent fix: add `C:\Xilinx` to Defender
+exclusions.) Not a project/code issue.
+
+**Hardware test** (`ps/dac_adc_test.py`, new — combined DAC+ADC, MMIO fallback):
+- **DAC PASS** — ECG_DAC (0x40) sweeps 0x622→0xFFA, range **2520 counts**.
+- **ADC PASS** — AD7991 CH0 ACKs, raw 1272–2980 (~1.0–2.4 V), live data (not stuck
+  0xFFF). Read via **raw MMIO at 0x41600000**; PYNQ does NOT auto-bind `axi_iic_0`
+  (`ip_dict` = `ecg_process_top_0` + `processing_system7_0`) but the dynamic-mode
+  MMIO sequence works. **The old AXI-IIC NACK deadlock was the wrong pins, not the IP.**
+
+**Board access established:** IP 192.168.2.99 (PYNQ 3.x / Ubuntu 22.04), SSH key +
+passwordless sudo set up, deploy to `/home/xilinx/jupyter_notebooks/pynq-ecg-demo/ps`.
+Overlay load needs `source /etc/profile.d/{pynq_venv,xrt_setup}.sh` or "No Devices Found".
+
+**Files added/changed:** `ps/dac_adc_test.py` (new).
+
+**Next:** FIR timing (−6.8 ns WNS) is the remaining open item; ECG_RAW/FILTERED + BPM
+depend on it. DAC + ADC datapaths are confirmed working on hardware.
+

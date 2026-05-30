@@ -10,6 +10,10 @@ vivado/build/
 vivado/build_i2c_test/
 vivado/build_mb/
 vivado/pynq_src/
+vivado/*stdout*.txt
+vivado/*stderr*.txt
+vivado/*.backup.txt
+vivado/build_log*.txt
 *.ltx
 NA/
 
