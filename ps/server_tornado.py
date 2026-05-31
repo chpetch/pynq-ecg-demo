@@ -45,13 +45,18 @@ class WSHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         WSHandler.clients.add(self)
         period_ms = 1000.0 / ecg_hw.SAMPLE_RATE_HZ
+        self._last_ts = None
         self._pcb = tornado.ioloop.PeriodicCallback(self._send, period_ms)
         self._pcb.start()
         print(f"WebSocket client connected. Total: {len(WSHandler.clients)}")
 
     def _send(self):
         try:
-            self.write_message(json.dumps(ecg_hw.build_packet()))
+            pkt = ecg_hw.get_telemetry()        # broadcaster: no AXI reads here
+            if not pkt or pkt.get("timestamp_ms") == self._last_ts:
+                return                          # nothing new yet — skip duplicate
+            self._last_ts = pkt["timestamp_ms"]
+            self.write_message(json.dumps(pkt))
         except tornado.websocket.WebSocketClosedError:
             self._pcb.stop()
         except Exception as exc:

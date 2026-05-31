@@ -81,8 +81,14 @@ FIELD_MAP = {
 overlay = None
 axi = None
 sampler = None
+poller = None
 start_time_ms = 0.0
-prev_rpeak_count = 0
+
+# Broadcaster: one TelemetryPoller thread fills current_telemetry; every WS client
+# just reads it. Keeps AXI reads O(1) regardless of client count and does R-peak
+# edge detection in exactly one place (no multi-client race).
+current_telemetry: dict = {}
+telemetry_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -171,12 +177,85 @@ class AD7991Sampler:
 
 
 # ---------------------------------------------------------------------------
+# Telemetry broadcaster (single poller thread feeding all WS clients)
+# ---------------------------------------------------------------------------
+
+class TelemetryPoller:
+    """Single background thread that reads the AXI register map once per tick,
+    does R-peak edge detection in one place, and publishes the latest packet to
+    `current_telemetry`. WS clients read that via get_telemetry() — so hardware
+    reads are O(1) regardless of client count, and every client observes the same
+    R-peak edges (fixes the multi-client R-peak race)."""
+
+    def __init__(self):
+        self._stop_evt = threading.Event()
+        self._thread = None
+        self._prev_rpeak = 0
+        self._error_logged = False
+
+    def start(self) -> None:
+        self._prev_rpeak = axi_read(ECGRegisters.RPEAK_COUNT) & 0xFFFF
+        self._stop_evt.clear()
+        self._thread = threading.Thread(target=self._loop, name="TelemetryPoller", daemon=True)
+        self._thread.start()
+        print(f"TelemetryPoller started at {SAMPLE_RATE_HZ} Hz (broadcaster)")
+
+    def stop(self) -> None:
+        self._stop_evt.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+        print("TelemetryPoller stopped.")
+
+    def _loop(self) -> None:
+        global current_telemetry
+        period_s = 1.0 / SAMPLE_RATE_HZ
+        next_tick = time.monotonic()
+        while not self._stop_evt.is_set():
+            try:
+                now_ms       = time.monotonic() * 1000 - start_time_ms
+                ecg_raw      = axi_read(ECGRegisters.ECG_RAW)      & 0xFFF
+                ecg_dac      = axi_read(ECGRegisters.ECG_DAC)      & 0xFFF
+                ecg_filtered = axi_read(ECGRegisters.ECG_FILTERED) & 0xFFF
+                bpm_out      = axi_read(ECGRegisters.BPM_OUT)      & 0xFF
+                rpeak_count  = axi_read(ECGRegisters.RPEAK_COUNT)  & 0xFFFF
+                status_reg   = axi_read(ECGRegisters.STATUS)       & 0x03
+
+                rpeak_fired = rpeak_count != self._prev_rpeak
+                self._prev_rpeak = rpeak_count
+
+                packet = {
+                    "timestamp_ms": round(now_ms, 3),
+                    "ecg_raw":      ecg_raw,
+                    "ecg_dac":      ecg_dac,
+                    "ecg_filtered": ecg_filtered,
+                    "bpm":          bpm_out,
+                    "rpeak":        rpeak_fired,
+                    "status": {
+                        "signal_present": bool(status_reg & 0x01),
+                        "lead_off":       bool(status_reg & 0x02),
+                    },
+                }
+                with telemetry_lock:
+                    current_telemetry = packet
+            except Exception as exc:
+                if not self._error_logged:
+                    print(f"Telemetry poll error (suppressing further): {exc}")
+                    self._error_logged = True
+            next_tick += period_s
+            delta = next_tick - time.monotonic()
+            if delta > 0:
+                time.sleep(delta)
+            else:
+                next_tick = time.monotonic()
+
+
+# ---------------------------------------------------------------------------
 # Lifecycle
 # ---------------------------------------------------------------------------
 
 def load_overlay() -> None:
-    """Load the PL bitstream and start the ADC sampler. Sets module globals."""
-    global overlay, axi, sampler, start_time_ms, prev_rpeak_count
+    """Load the PL bitstream, start the ADC sampler + telemetry poller."""
+    global overlay, axi, sampler, poller, start_time_ms
 
     if not os.path.exists(BITSTREAM_PATH):
         print(f"ERROR: {BITSTREAM_PATH} not found. Copy the Vivado bitstream first.")
@@ -197,12 +276,18 @@ def load_overlay() -> None:
     sampler.start()
 
     start_time_ms = time.monotonic() * 1000
-    prev_rpeak_count = axi_read(ECGRegisters.RPEAK_COUNT) & 0xFFFF
+    poller = TelemetryPoller()   # must start after start_time_ms is set
+    poller.start()
 
 
 def shutdown() -> None:
-    """Stop the sampler and release the overlay."""
-    global sampler, overlay
+    """Stop the poller + sampler and release the overlay."""
+    global sampler, poller, overlay
+    if poller is not None:
+        try:
+            poller.stop()
+        except Exception:
+            pass
     if sampler is not None:
         try:
             sampler.stop()
@@ -220,33 +305,12 @@ def shutdown() -> None:
 # Data plane — packet / config / status (shared by both transports)
 # ---------------------------------------------------------------------------
 
-def build_packet() -> dict:
-    """Read the register map and build one WS packet (matches ws_schema.json)."""
-    global prev_rpeak_count
-    now_ms = time.monotonic() * 1000 - start_time_ms
-
-    ecg_raw      = axi_read(ECGRegisters.ECG_RAW)      & 0xFFF
-    ecg_dac      = axi_read(ECGRegisters.ECG_DAC)      & 0xFFF
-    ecg_filtered = axi_read(ECGRegisters.ECG_FILTERED) & 0xFFF
-    bpm_out      = axi_read(ECGRegisters.BPM_OUT)      & 0xFF
-    rpeak_count  = axi_read(ECGRegisters.RPEAK_COUNT)  & 0xFFFF
-    status_reg   = axi_read(ECGRegisters.STATUS)       & 0x03
-
-    rpeak_fired = rpeak_count != prev_rpeak_count
-    prev_rpeak_count = rpeak_count
-
-    return {
-        "timestamp_ms": round(now_ms, 3),
-        "ecg_raw":      ecg_raw,
-        "ecg_dac":      ecg_dac,
-        "ecg_filtered": ecg_filtered,
-        "bpm":          bpm_out,
-        "rpeak":        rpeak_fired,
-        "status": {
-            "signal_present": bool(status_reg & 0x01),
-            "lead_off":       bool(status_reg & 0x02),
-        },
-    }
+def get_telemetry() -> dict:
+    """Return a copy of the latest broadcaster packet (matches ws_schema.json).
+    WS clients call this — it performs NO AXI reads, so hardware load is constant
+    regardless of how many clients are connected."""
+    with telemetry_lock:
+        return dict(current_telemetry)
 
 
 def apply_config(data: dict) -> list:

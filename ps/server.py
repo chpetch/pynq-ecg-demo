@@ -76,9 +76,13 @@ async def ws_stream(websocket: WebSocket):
     await websocket.accept()
     connected_clients.append(websocket)
     print(f"WebSocket client connected. Total: {len(connected_clients)}")
+    last_ts = None
     try:
         while True:
-            await websocket.send_json(ecg_hw.build_packet())
+            pkt = ecg_hw.get_telemetry()        # broadcaster: no AXI reads here
+            if pkt and pkt.get("timestamp_ms") != last_ts:
+                last_ts = pkt["timestamp_ms"]
+                await websocket.send_json(pkt)
             await asyncio.sleep(1 / SAMPLE_RATE_HZ)
     except WebSocketDisconnect:
         pass
