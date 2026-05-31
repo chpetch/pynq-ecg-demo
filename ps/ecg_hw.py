@@ -23,10 +23,12 @@ BITSTREAM_PATH = "ecg_demo.bit"
 AXI_BASE = 0x43C00000
 SAMPLE_RATE_HZ = 360
 # Recalibrated for the hardware filtered scale: the FIR-filtered QRS peaks at
-# ~2950-3000 on the board (baseline ~1500, secondary features ~1750), so the
-# algorithm_spec value 2983 sat right at the peak tips and starved detection.
-# 2700 cleanly catches the QRS only.
-DEFAULT_DETECT_THRESHOLD = 2700
+# ~2950-3000 on the board (baseline ~1500, secondary features ~1750). The
+# algorithm_spec value 2983 sat at the peak tips and starved detection; 2700 left
+# only ~250 margin (occasional misses + 206-BPM doubles). 2400 gives solid margin
+# below the QRS while staying well above the ~1750 secondary features (no
+# double-detection) — measured BPM is a steady 60 with no doubles.
+DEFAULT_DETECT_THRESHOLD = 2400
 SENTINEL_VALUES = (0xDEADBEEF, 0xFFFFFFFF)
 
 # AD7991-0 (PMOD AD2) — read via Xilinx AXI IIC IP at 0x41600000 by raw MMIO

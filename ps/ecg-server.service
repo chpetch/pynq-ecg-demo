@@ -1,0 +1,16 @@
+[Unit]
+Description=PYNQ-Z2 ECG Tornado server (live ECG over WebSocket + REST)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+# Mirror start_server.sh: overlay load needs root AND the sourced PYNQ/XRT env
+# (else "No Devices Found"). The board is offline so it runs the Tornado server.
+ExecStart=/bin/bash -c 'source /etc/profile.d/pynq_venv.sh; source /etc/profile.d/xrt_setup.sh; cd /home/xilinx/jupyter_notebooks/pynq-ecg-demo/ps; exec python3 -u server_tornado.py'
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
