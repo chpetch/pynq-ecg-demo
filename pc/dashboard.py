@@ -71,6 +71,10 @@ def _init_state() -> None:
         "stop_rerun":      threading.Event(),
         "toast_pending":   None,
         "error_pending":   None,
+        # Lazy CSV export — built only on demand, never on idle reruns
+        "csv_ready":       False,
+        "csv_data":        "",
+        "csv_filename":    "",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -212,7 +216,7 @@ def _build_chart(buffer_snapshot: list) -> go.Figure:
 
     fig = go.Figure()
 
-    fig.add_trace(go.Scatter(
+    fig.add_trace(go.Scattergl(
         x=times, y=dac,
         name="DAC",
         line=dict(color=COLOR_DAC, width=1),
@@ -220,7 +224,7 @@ def _build_chart(buffer_snapshot: list) -> go.Figure:
         mode="lines",
     ))
 
-    fig.add_trace(go.Scatter(
+    fig.add_trace(go.Scattergl(
         x=times, y=raw,
         name="ADC (live, CH0)",
         line=dict(color=COLOR_RAW, width=1.5),
@@ -228,7 +232,7 @@ def _build_chart(buffer_snapshot: list) -> go.Figure:
         mode="lines",
     ))
 
-    fig.add_trace(go.Scatter(
+    fig.add_trace(go.Scattergl(
         x=times, y=filtered,
         name="Filtered ECG",
         line=dict(color=COLOR_FILTERED, width=1.5),
@@ -237,7 +241,7 @@ def _build_chart(buffer_snapshot: list) -> go.Figure:
     ))
 
     if rp_times:
-        fig.add_trace(go.Scatter(
+        fig.add_trace(go.Scattergl(
             x=rp_times, y=rp_vals,
             name="R-peaks",
             mode="markers",
@@ -325,7 +329,7 @@ def _status_fragment() -> None:
     )
 
 
-@st.fragment(run_every="0.1s")
+@st.fragment(run_every="0.25s")  # 4 fps — enough for live ECG, far lighter than 10 fps
 def _chart_fragment() -> None:
     connected = st.session_state["connected"]
     with st.session_state["buffer_lock"]:
@@ -454,24 +458,42 @@ def main() -> None:
         st.divider()
         st.markdown("#### Export")
 
+        # Lazy CSV: only count samples on rerun (cheap). The expensive
+        # _build_csv() serialization runs ONCE when the user clicks Prepare,
+        # not on every rerun — avoids the CPU/memory spike on a growing recording.
         with st.session_state["buffer_lock"]:
-            recording_snapshot = list(st.session_state["recording"])
+            recording_size = len(st.session_state["recording"])
 
-        csv_data  = _build_csv(recording_snapshot)
-        ts_str    = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename  = f"ecg_recording_{ts_str}.csv"
-
-        st.download_button(
-            label="Download CSV",
-            data=csv_data,
-            file_name=filename,
-            mime="text/csv",
-            use_container_width=True,
-            disabled=len(recording_snapshot) == 0,
-        )
-
-        if recording_snapshot:
-            st.caption(f"{len(recording_snapshot)} samples recorded")
+        if recording_size == 0:
+            st.download_button(
+                "Download CSV", data="", disabled=True,
+                use_container_width=True,
+            )
+        elif not st.session_state["csv_ready"]:
+            st.caption(f"{recording_size} samples recorded")
+            if st.button("Prepare CSV Export", use_container_width=True):
+                with st.spinner("Generating CSV…"):
+                    with st.session_state["buffer_lock"]:
+                        recording_snapshot = list(st.session_state["recording"])
+                    st.session_state["csv_data"] = _build_csv(recording_snapshot)
+                    ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    st.session_state["csv_filename"] = f"ecg_recording_{ts_str}.csv"
+                    st.session_state["csv_ready"] = True
+                st.rerun()
+        else:
+            st.caption(f"{recording_size} samples recorded — export ready")
+            st.download_button(
+                label="Download CSV",
+                data=st.session_state["csv_data"],
+                file_name=st.session_state["csv_filename"],
+                mime="text/csv",
+                use_container_width=True,
+            )
+            if st.button("Reset Export", use_container_width=True):
+                st.session_state["csv_ready"] = False
+                st.session_state["csv_data"] = ""
+                st.session_state["csv_filename"] = ""
+                st.rerun()
 
 
 if __name__ == "__main__":
