@@ -5,6 +5,21 @@
 //            AXI4-Lite control registers. ADC sampling moved to PS — PS reads
 //            from a Xilinx AXI IIC IP (in the block design) and writes the
 //            12-bit sample into ECG_RAW (0x28) which feeds the FIR.
+//
+// CLOCKING / CDC CONTRACT (do not break):
+//   This module has two clock inputs, `clk` (signal-gen + processing pipeline)
+//   and `s_axi_aclk` (AXI4-Lite slave). Control/status signals cross between the
+//   AXI domain (u_axi_ctrl) and the pipeline domain (FIR / R-peak) WITHOUT CDC
+//   synchronizers. This is SAFE **only because both clocks are driven from the
+//   same source** — FCLK_CLK0 @ 100 MHz — in vivado/create_project.tcl
+//   (clk and s_axi_aclk both connect to ps7/FCLK_CLK0), so the two "domains" are
+//   one synchronous domain and Vivado STA closes timing on the direct paths.
+//   ⚠ If `clk` and `s_axi_aclk` are ever sourced from DIFFERENT clocks (e.g. a
+//   future build drives the pipeline from FCLK_CLK1 for timing), they become
+//   asynchronous and these direct crossings will be metastable. In that case add
+//   2-FF synchronizers for the stable config buses (bpm_ch_*, rr_fluct,
+//   amp_fluct, detect_thresh) and proper PULSE synchronizers for single-cycle
+//   strobes (adc_valid_out, rpeak_in) before changing the clock topology.
 
 module ecg_process_top (
     input  wire        clk,

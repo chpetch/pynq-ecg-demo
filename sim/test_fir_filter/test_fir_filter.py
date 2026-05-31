@@ -41,20 +41,18 @@ async def reset_dut(dut):
 
 async def send_and_collect(dut, samples, drain_extra=5):
     """
-    Send all samples one per clock cycle (data_valid=1 for 1 cycle, gap=0).
+    Send all samples one per clock cycle (data_valid=1 each cycle).
     Simultaneously collect data_out values when data_valid_out=1.
 
-    RTL pipeline note: the last sample's acc is only registered into data_out
-    when data_valid=1 in the FOLLOWING cycle (because data_out <= acc is inside
-    the if(data_valid) block). To avoid losing the last sample, we append one
-    extra zero sample as a flush token — the output from this flush is discarded.
+    RTL pipeline (after the output-registration fix in fir_filter.v): data_out is
+    registered when valid_pipe=1 (one cycle after data_valid), so the last real
+    sample's acc IS captured — no flush token needed. data_valid_out also rises via
+    valid_pipe, so data_out is aligned with data_valid_out (no 1-sample lag).
 
     Returns list of output values (one per input sample, in order).
     """
     outputs = []
-    # Append one flush sample so the last real sample's acc gets registered
-    flush_samples = list(samples) + [0]
-    n = len(flush_samples)
+    n = len(samples)
     total_cycles = n + drain_extra + 10
 
     async def monitor():
@@ -65,7 +63,7 @@ async def send_and_collect(dut, samples, drain_extra=5):
 
     mon = cocotb.start_soon(monitor())
 
-    for s in flush_samples:
+    for s in samples:
         dut.data_in.value = s
         dut.data_valid.value = 1
         await RisingEdge(dut.clk)
@@ -76,7 +74,6 @@ async def send_and_collect(dut, samples, drain_extra=5):
     await ClockCycles(dut.clk, drain_extra + 10)
     await mon
 
-    # Return only the first len(samples) outputs (discard the flush token output)
     return outputs[:len(samples)]
 
 

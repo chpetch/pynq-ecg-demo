@@ -49,17 +49,23 @@ module rpeak_detector (
     // We implement a simple registered divider: divide 21600 by last_interval
     // using a 16-bit iterative divider to avoid synthesis latches.
 
-    localparam [14:0] BPM_NUMERATOR = 15'd21600;   // 360 * 60
+    localparam [15:0] BPM_NUMERATOR = 16'd21600;   // 360 * 60
 
-    // Iterative divider signals
-    reg  [15:0] div_dividend;
+    // Constant-time 16-cycle shift-and-subtract divider: BPM = 21600 / interval.
+    // div_quo doubles as the shifting dividend — the dividend's MSB shifts out into
+    // the remainder while the quotient bit shifts in at the LSB; after 16 steps
+    // div_quo holds the quotient. Runtime is exactly 16 cycles for any interval.
+    reg  [15:0] div_rem;
+    reg  [15:0] div_quo;
     reg  [15:0] div_divisor;
-    reg  [15:0] div_quotient;
     reg  [3:0]  div_step;
     reg         div_busy;
-    reg  [15:0] div_remainder;
 
-    wire [7:0]  bpm_clamped = (div_quotient > 16'd255) ? 8'd255 : div_quotient[7:0];
+    // Combinational shift-then-(compare/subtract) for one division step
+    wire [15:0] rem_shifted = {div_rem[14:0], div_quo[15]};
+    wire        rem_ge      = (rem_shifted >= div_divisor);
+    wire [15:0] rem_next    = rem_ge ? (rem_shifted - div_divisor) : rem_shifted;
+    wire [15:0] quo_next    = {div_quo[14:0], rem_ge};
 
     // ---------------------------------------------------------------------------
     // Main FSM
@@ -73,10 +79,9 @@ module rpeak_detector (
             prev_above     <= 1'b0;
             rpeak_detected <= 1'b0;
             bpm_out        <= 8'd0;
-            div_dividend   <= 16'd0;
+            div_rem        <= 16'd0;
+            div_quo        <= 16'd0;
             div_divisor    <= 16'd1;
-            div_quotient   <= 16'd0;
-            div_remainder  <= 16'd0;
             div_step       <= 4'd0;
             div_busy       <= 1'b0;
         end else begin
@@ -110,14 +115,13 @@ module rpeak_detector (
                         refractory_cnt <= REFRACTORY_SAMPLES - 1'b1;
                         in_refractory  <= 1'b1;
 
-                        // Launch BPM divider (if interval is valid and non-zero)
+                        // Launch constant-time divider (16 cycles) if interval valid
                         if (interval_cnt != 16'd0 && interval_cnt != INTERVAL_SATURATE) begin
-                            div_dividend <= BPM_NUMERATOR;
-                            div_divisor  <= interval_cnt;
-                            div_quotient <= 16'd0;
-                            div_remainder<= BPM_NUMERATOR;
-                            div_step     <= 4'd0;
-                            div_busy     <= 1'b1;
+                            div_rem     <= 16'd0;
+                            div_quo     <= BPM_NUMERATOR;  // dividend; becomes quotient
+                            div_divisor <= interval_cnt;
+                            div_step    <= 4'd0;
+                            div_busy    <= 1'b1;
                         end else begin
                             bpm_out <= 8'd0;
                         end
@@ -128,17 +132,18 @@ module rpeak_detector (
             end
 
             // ------------------------------------------------------------------
-            // Iterative non-restoring divider (16 steps, runs asynchronously
-            // from sample_valid — completes between ECG samples at 360 Hz)
+            // Constant-time 16-cycle shift-and-subtract divider. Exactly 16 cycles
+            // for any interval (deterministic), completing far within one 360 Hz
+            // sample period. quo_next holds the final quotient on the last step.
             // ------------------------------------------------------------------
             if (div_busy) begin
-                if (div_remainder >= div_divisor) begin
-                    div_remainder <= div_remainder - div_divisor;
-                    div_quotient  <= div_quotient + 1'b1;
-                end else begin
-                    // Done — quotient is the BPM
-                    bpm_out  <= bpm_clamped;
+                div_rem <= rem_next;
+                div_quo <= quo_next;
+                if (div_step == 4'd15) begin
                     div_busy <= 1'b0;
+                    bpm_out  <= (quo_next > 16'd255) ? 8'd255 : quo_next[7:0];
+                end else begin
+                    div_step <= div_step + 1'b1;
                 end
             end
 

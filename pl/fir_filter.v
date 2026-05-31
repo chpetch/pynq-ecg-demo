@@ -157,8 +157,14 @@ module fir_filter (
                     ($signed({1'b0, delay[28]})  * H29) +
                     ($signed({1'b0, delay[29]})  * H30);
 
-                // Truncation: accumulator >> 15, keep bits [11:0] — per algorithm_spec.md
-                // acc[26:15] = (acc >> 15)[11:0]
+            end
+
+            // Truncate and register the output ONE cycle after data_valid, when
+            // the newly computed `acc` is stable. This aligns data_out with
+            // data_valid_out (which also rises via valid_pipe) and removes the
+            // old 1-sample output lag (no flush token needed).
+            // acc[26:15] = (acc >> 15)[11:0], per algorithm_spec.md
+            if (valid_pipe) begin
                 data_out <= acc[26:15];
             end
         end
