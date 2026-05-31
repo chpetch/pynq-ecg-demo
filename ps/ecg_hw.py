@@ -13,6 +13,7 @@ behaviour and register map stay in one place.
 import os
 import threading
 import time
+from collections import deque
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -21,7 +22,11 @@ import time
 BITSTREAM_PATH = "ecg_demo.bit"
 AXI_BASE = 0x43C00000
 SAMPLE_RATE_HZ = 360
-DEFAULT_DETECT_THRESHOLD = 2983  # 0xBA7 per algorithm_spec.md
+# Recalibrated for the hardware filtered scale: the FIR-filtered QRS peaks at
+# ~2950-3000 on the board (baseline ~1500, secondary features ~1750), so the
+# algorithm_spec value 2983 sat right at the peak tips and starved detection.
+# 2700 cleanly catches the QRS only.
+DEFAULT_DETECT_THRESHOLD = 2700
 SENTINEL_VALUES = (0xDEADBEEF, 0xFFFFFFFF)
 
 # AD7991-0 (PMOD AD2) — read via Xilinx AXI IIC IP at 0x41600000 by raw MMIO
@@ -192,6 +197,14 @@ class TelemetryPoller:
         self._thread = None
         self._prev_rpeak = 0
         self._error_logged = False
+        # PS-side BPM: computed from real R-peak timestamps, NOT the PL bpm_out
+        # register. The PL divider assumes a 360 Hz sample rate (BPM=21600/interval),
+        # but the ADC is fed by the PS I2C sampler at a slower, variable rate
+        # (~225 Hz), so the PL BPM is wrong. Timestamping the R-peak edges here
+        # gives a correct rate regardless of the ADC sample cadence.
+        self._last_rpeak_t = None     # time.monotonic() of last R-peak
+        self._rr = deque(maxlen=8)    # recent R-R intervals (seconds)
+        self._bpm = 0
 
     def start(self) -> None:
         self._prev_rpeak = axi_read(ECGRegisters.RPEAK_COUNT) & 0xFFFF
@@ -212,23 +225,38 @@ class TelemetryPoller:
         next_tick = time.monotonic()
         while not self._stop_evt.is_set():
             try:
-                now_ms       = time.monotonic() * 1000 - start_time_ms
+                now_s        = time.monotonic()
+                now_ms       = now_s * 1000 - start_time_ms
                 ecg_raw      = axi_read(ECGRegisters.ECG_RAW)      & 0xFFF
                 ecg_dac      = axi_read(ECGRegisters.ECG_DAC)      & 0xFFF
                 ecg_filtered = axi_read(ECGRegisters.ECG_FILTERED) & 0xFFF
-                bpm_out      = axi_read(ECGRegisters.BPM_OUT)      & 0xFF
                 rpeak_count  = axi_read(ECGRegisters.RPEAK_COUNT)  & 0xFFFF
                 status_reg   = axi_read(ECGRegisters.STATUS)       & 0x03
 
                 rpeak_fired = rpeak_count != self._prev_rpeak
                 self._prev_rpeak = rpeak_count
 
+                # PS-side BPM from R-peak timestamps (see __init__). Median of
+                # recent R-R intervals → robust to an occasional missed/double beat.
+                if rpeak_fired:
+                    if self._last_rpeak_t is not None:
+                        rr = now_s - self._last_rpeak_t
+                        if 0.24 <= rr <= 3.0:      # 20–250 BPM physiological window
+                            self._rr.append(rr)
+                    self._last_rpeak_t = now_s
+                if self._rr and self._last_rpeak_t is not None \
+                        and (now_s - self._last_rpeak_t) <= 3.0:
+                    med = sorted(self._rr)[len(self._rr) // 2]
+                    self._bpm = int(round(60.0 / med))
+                else:
+                    self._bpm = 0          # no recent beat → no signal
+
                 packet = {
                     "timestamp_ms": round(now_ms, 3),
                     "ecg_raw":      ecg_raw,
                     "ecg_dac":      ecg_dac,
                     "ecg_filtered": ecg_filtered,
-                    "bpm":          bpm_out,
+                    "bpm":          self._bpm,
                     "rpeak":        rpeak_fired,
                     "status": {
                         "signal_present": bool(status_reg & 0x01),
