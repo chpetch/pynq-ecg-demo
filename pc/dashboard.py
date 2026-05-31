@@ -30,8 +30,10 @@ DEFAULT_BOARD_IP   = "192.168.2.99"
 WS_PORT            = 5000
 REST_PORT          = 5000
 SAMPLE_RATE        = 360          # Hz
-DISPLAY_WINDOW_SEC = 5            # seconds of ECG shown at once
-MAX_BUFFER         = SAMPLE_RATE * DISPLAY_WINDOW_SEC  # 1800 samples
+DISPLAY_WINDOW_SEC = 2            # seconds of ECG shown at once (~2 beats @60bpm)
+MAX_BUFFER         = SAMPLE_RATE * DISPLAY_WINDOW_SEC  # 720 samples — lighter redraw
+RECORDING_MAX      = SAMPLE_RATE * 60    # cap CSV/export buffer at ~1 min (21,600
+                                         # samples) so RAM reaches steady state fast
 
 # Slider defaults (from register_map.md)
 DEFAULT_BPM       = 60
@@ -54,7 +56,7 @@ def _init_state() -> None:
         "connected":       False,
         "board_ip":        DEFAULT_BOARD_IP,
         "buffer":          collections.deque(maxlen=MAX_BUFFER),
-        "recording":       [],
+        "recording":       collections.deque(maxlen=RECORDING_MAX),
         "buffer_lock":     threading.Lock(),
         "ws_thread":       None,
         "stop_ws":         threading.Event(),
@@ -134,17 +136,11 @@ async def _ws_receive(board_ip: str, stop_event: threading.Event) -> None:
                     except json.JSONDecodeError:
                         continue
 
-                    # Update live status fields
-                    status = pkt.get("status", {})
-                    st.session_state["lead_off"]       = status.get("lead_off", False)
-                    st.session_state["signal_present"] = status.get("signal_present", False)
-
-                    bpm = pkt.get("bpm", 0)
-                    if bpm and bpm != st.session_state["last_bpm"]:
-                        st.session_state["prev_bpm"] = st.session_state["last_bpm"]
-                        st.session_state["last_bpm"] = bpm
-
-                    # Thread-safe buffer update
+                    # Keep per-message work MINIMAL so this thread sustains the
+                    # ~360 msg/s stream (otherwise a socket backlog builds and the
+                    # plot lags further behind real time the longer it runs).
+                    # Status/BPM are derived from the latest buffered packet in the
+                    # display fragments — NOT written to session_state per message.
                     with st.session_state["buffer_lock"]:
                         st.session_state["buffer"].append(pkt)
                         st.session_state["recording"].append(pkt)
@@ -207,7 +203,6 @@ def _build_chart(buffer_snapshot: list) -> go.Figure:
     for i, pkt in enumerate(buffer_snapshot):
         t = i / SAMPLE_RATE
         times.append(t)
-        dac.append(pkt.get("ecg_dac",      0))
         raw.append(pkt.get("ecg_raw",      0))
         filtered.append(pkt.get("ecg_filtered", 0))
         if pkt.get("rpeak", False):
@@ -216,14 +211,8 @@ def _build_chart(buffer_snapshot: list) -> go.Figure:
 
     fig = go.Figure()
 
-    fig.add_trace(go.Scattergl(
-        x=times, y=dac,
-        name="DAC",
-        line=dict(color=COLOR_DAC, width=1),
-        opacity=0.5,
-        mode="lines",
-    ))
-
+    # DAC trace dropped — it's just the source the ADC mirrors; plotting ADC +
+    # Filtered is lighter (fewer points per redraw) and shows the live signal.
     fig.add_trace(go.Scattergl(
         x=times, y=raw,
         name="ADC (live, CH0)",
@@ -304,10 +293,21 @@ def _build_csv(recording: list) -> str:
 @st.fragment(run_every="0.3s")
 def _status_fragment() -> None:
     connected = st.session_state["connected"]
-    lead_off  = st.session_state["lead_off"]
-    last_bpm  = st.session_state["last_bpm"]
-    prev_bpm  = st.session_state["prev_bpm"]
     board_ip  = st.session_state["board_ip"]
+
+    # Derive live status/BPM from the most recent buffered packet (the WS thread
+    # no longer writes these per message — keeps it fast). Delta tracking happens
+    # here, on the main script context, so session_state writes are safe.
+    with st.session_state["buffer_lock"]:
+        buf = st.session_state["buffer"]
+        latest = buf[-1] if buf else None
+    lead_off = bool(latest and latest.get("status", {}).get("lead_off", False))
+    cur_bpm  = int(latest.get("bpm", 0)) if latest else 0
+    if cur_bpm and cur_bpm != st.session_state["last_bpm"]:
+        st.session_state["prev_bpm"] = st.session_state["last_bpm"]
+        st.session_state["last_bpm"] = cur_bpm
+    last_bpm = st.session_state["last_bpm"]
+    prev_bpm = st.session_state["prev_bpm"]
 
     if lead_off:
         st.markdown('<span style="color:#FFAA00;font-size:1.1em">⚠ Signal Lost</span>',
@@ -329,16 +329,20 @@ def _status_fragment() -> None:
     )
 
 
-@st.fragment(run_every="0.25s")  # 4 fps — enough for live ECG, far lighter than 10 fps
+@st.fragment(run_every="0.1s")  # 10 fps — affordable now that the window is 2s (~720 pts)
 def _chart_fragment() -> None:
     connected = st.session_state["connected"]
     with st.session_state["buffer_lock"]:
         snapshot = list(st.session_state["buffer"])
     if snapshot:
+        # Stable key → Streamlit updates this one chart element in place each tick
+        # (Plotly.react) instead of creating a fresh chart every rerun, which leaks
+        # browser memory and makes the plot creep laggier over time.
         st.plotly_chart(
             _build_chart(snapshot),
             use_container_width=True,
             config={"displayModeBar": False},
+            key="ecg_live_chart",
         )
     elif connected:
         st.info("Waiting for ECG data…")
